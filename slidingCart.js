@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.0.5
+// src/scripts/slidingCart.js v1.0.6
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -73,17 +73,6 @@
           .hmstudio-cart-item-price {
             color: #666;
             margin-bottom: 10px;
-          }
-          .hmstudio-quantity-select {
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-right: 10px;
-          }
-          .hmstudio-remove-item {
-            color: #ff4444;
-            text-decoration: none;
-            font-size: 14px;
           }
           .hmstudio-cart-empty {
             text-align: center;
@@ -237,25 +226,19 @@
           });
         });
       }
-  
       async fetchCartData() {
         try {
-          if (window.zid && window.zid.store && window.zid.store.cart) {
-            const cartResponse = await window.zid.store.cart.addProduct({ 
-              formId: 'temp-form',
-              data: {
-                refresh_only: true
-              }
-            });
+          // Create temporary cart template if it doesn't exist
+          if (!document.querySelector('.template_for_cart_products_list')) {
+            const tempTemplate = document.createElement('div');
+            tempTemplate.className = 'template_for_cart_products_list';
+            tempTemplate.style.display = 'none';
+            document.body.appendChild(tempTemplate);
+          }
   
-            if (cartResponse && cartResponse.status === 'success') {
-              this.cartData = cartResponse.data.cart;
-              this.updateCartDisplay();
-            } else {
-              console.error('Failed to fetch cart data:', cartResponse);
-            }
-          } else {
-            console.error('Zid cart API not available');
+          // Trigger cart refresh
+          if (window.zid && window.zid.store && window.zid.store.cart) {
+            await window.zid.store.cart.get();
           }
         } catch (error) {
           console.error('Error fetching cart data:', error);
@@ -263,127 +246,139 @@
       }
   
       setupCartUpdateListener() {
-        // Listen for cart HTML changes from Zid
+        // Create a hidden cart template if it doesn't exist
+        if (!document.querySelector('.template_for_cart_products_list')) {
+          const tempTemplate = document.createElement('div');
+          tempTemplate.className = 'template_for_cart_products_list';
+          tempTemplate.style.display = 'none';
+          document.body.appendChild(tempTemplate);
+        }
+  
+        // Override Zid's cart update handler
         const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
+        
         window.cartProductsHtmlChanged = (html, cart) => {
+          // Call original handler
           originalCartProductsHtmlChanged(html, cart);
-          if (cart) {
-            this.cartData = cart;
-            this.updateCartDisplay();
+          
+          console.log('Cart update received:', cart);
+          
+          const cartItemsEl = document.getElementById('hmstudio-cart-items');
+          const emptyCartEl = document.getElementById('hmstudio-cart-empty');
+          const cartTotalsEl = document.getElementById('hmstudio-cart-totals');
+          
+          // Handle empty cart state
+          if (!cart || !cart.products || cart.products.length === 0) {
+            if (emptyCartEl) emptyCartEl.style.display = 'block';
+            if (cartItemsEl) cartItemsEl.style.display = 'none';
+            if (cartTotalsEl) cartTotalsEl.innerHTML = '';
+            return;
+          }
+  
+          // Update cart items
+          if (cartItemsEl) {
+            let itemsHtml = '';
+            cart.products.forEach(product => {
+              itemsHtml += `
+                <div class="hmstudio-cart-item" data-product-id="${product.id}">
+                  <div class="hmstudio-cart-item-image">
+                    <img src="${product.image}" alt="${product.name[this.currentLanguage]}">
+                  </div>
+                  <div class="hmstudio-cart-item-details">
+                    <a href="${product.url}" class="hmstudio-cart-item-name">
+                      ${product.name[this.currentLanguage]}
+                    </a>
+                    <div class="hmstudio-cart-item-price">
+                      ${product.formatted_price}
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                      <div class="cart-product-quantity-dropdown" style="margin-right: 10px;">
+                        <select 
+                          class="form-control hmstudio-quantity-select" 
+                          data-product-id="${product.id}"
+                        >
+                          ${[1,2,3,4,5,6,7,8,9,10].map(num => 
+                            `<option value="${num}" ${product.quantity === num ? 'selected' : ''}>
+                              ${num}
+                            </option>`
+                          ).join('')}
+                        </select>
+                      </div>
+                      <button 
+                        class="hmstudio-remove-item"
+                        data-product-id="${product.id}"
+                        style="background: none; border: none; color: #ff4444; cursor: pointer; padding: 0;"
+                      >
+                        ${this.currentLanguage === 'ar' ? 'حذف' : 'Remove'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            });
+            
+            if (emptyCartEl) emptyCartEl.style.display = 'none';
+            cartItemsEl.style.display = 'block';
+            cartItemsEl.innerHTML = itemsHtml;
+          }
+  
+          // Update totals
+          if (cartTotalsEl && cart.totals) {
+            let totalsHtml = '';
+            cart.totals.forEach(total => {
+              const isTotal = total.code === 'total';
+              totalsHtml += `
+                <div class="hmstudio-total-row" style="${isTotal ? 'font-weight: bold;' : ''}">
+                  <span>${total.title}</span>
+                  <span>${total.value_string}</span>
+                </div>
+              `;
+            });
+            cartTotalsEl.innerHTML = totalsHtml;
+          }
+  
+          // Update cart badge if the function exists
+          if (typeof setCartBadge === 'function') {
+            setCartBadge(cart.products_count || 0);
           }
         };
   
-        // Setup product quantity change handler
+        // Handle quantity changes
         document.addEventListener('change', async (e) => {
           if (e.target.matches('.hmstudio-quantity-select')) {
             const productId = e.target.dataset.productId;
             const quantity = parseInt(e.target.value);
             
-            try {
-              await window.zid.store.cart.addProduct({ 
-                formId: 'temp-form',
-                data: {
+            if (window.zid && window.zid.store && window.zid.store.cart) {
+              try {
+                await window.zid.store.cart.updateProduct({
                   product_id: productId,
                   quantity: quantity
-                }
-              });
-              await this.fetchCartData();
-            } catch (error) {
-              console.error('Error updating quantity:', error);
+                });
+              } catch (error) {
+                console.error('Error updating quantity:', error);
+              }
             }
           }
         });
   
-        // Setup product removal handler
+        // Handle product removal
         document.addEventListener('click', async (e) => {
           if (e.target.matches('.hmstudio-remove-item')) {
             e.preventDefault();
             const productId = e.target.dataset.productId;
             
-            try {
-              await window.zid.store.cart.removeProduct({ 
-                data: {
+            if (window.zid && window.zid.store && window.zid.store.cart) {
+              try {
+                await window.zid.store.cart.removeProduct({
                   product_id: productId
-                }
-              });
-              await this.fetchCartData();
-            } catch (error) {
-              console.error('Error removing product:', error);
+                });
+              } catch (error) {
+                console.error('Error removing product:', error);
+              }
             }
           }
         });
-      }
-  
-      updateCartDisplay() {
-        const emptyCartEl = document.getElementById('hmstudio-cart-empty');
-        const cartItemsEl = document.getElementById('hmstudio-cart-items');
-        const cartTotalsEl = document.getElementById('hmstudio-cart-totals');
-  
-        if (!emptyCartEl || !cartItemsEl || !cartTotalsEl) {
-          console.error('Required cart elements not found');
-          return;
-        }
-  
-        if (!this.cartData || !this.cartData.products || this.cartData.products.length === 0) {
-          emptyCartEl.style.display = 'block';
-          cartItemsEl.style.display = 'none';
-          cartTotalsEl.innerHTML = '';
-          return;
-        }
-  
-        emptyCartEl.style.display = 'none';
-        cartItemsEl.style.display = 'block';
-  
-        // Update cart items
-        let itemsHTML = '';
-        this.cartData.products.forEach(product => {
-          itemsHTML += `
-            <div class="hmstudio-cart-item">
-              <div class="hmstudio-cart-item-image">
-                <img src="${product.image}" alt="${product.name[this.currentLanguage]}">
-              </div>
-              <div class="hmstudio-cart-item-details">
-                <a href="${product.url}" class="hmstudio-cart-item-name">
-                  ${product.name[this.currentLanguage]}
-                </a>
-                <div class="hmstudio-cart-item-price">${product.formatted_price}</div>
-                <div style="display: flex; align-items: center;">
-                  <select class="hmstudio-quantity-select" data-product-id="${product.id}">
-                    ${[1,2,3,4,5,6,7,8,9,10].map(num => 
-                      `<option value="${num}" ${product.quantity === num ? 'selected' : ''}>
-                        ${num}
-                      </option>`
-                    ).join('')}
-                  </select>
-                  <a href="#" class="hmstudio-remove-item" data-product-id="${product.id}">
-                    ${this.currentLanguage === 'ar' ? 'حذف' : 'Remove'}
-                  </a>
-                </div>
-              </div>
-            </div>
-          `;
-        });
-        cartItemsEl.innerHTML = itemsHTML;
-  
-        // Update totals
-        if (this.cartData.totals) {
-          let totalsHTML = '';
-          this.cartData.totals.forEach(total => {
-            const isTotal = total.code === 'total';
-            totalsHTML += `
-              <div class="hmstudio-total-row" style="${isTotal ? 'font-weight: bold;' : ''}">
-                <span>${total.title}</span>
-                <span>${total.value_string}</span>
-              </div>
-            `;
-          });
-          cartTotalsEl.innerHTML = totalsHTML;
-        }
-  
-        // Update cart badge if function exists
-        if (typeof setCartBadge === 'function') {
-          setCartBadge(this.cartData.products.length);
-        }
       }
   
       openCart() {
