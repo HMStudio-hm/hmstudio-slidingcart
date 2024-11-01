@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.1.2
+// src/scripts/slidingCart.js v1.1.3
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -9,7 +9,6 @@
       constructor() {
         this.currentLanguage = document.documentElement.lang || 'ar';
         this.isOpen = false;
-        this.isInitialized = false;
         this.initialize();
       }
   
@@ -18,7 +17,7 @@
         this.injectCartPanel();
         this.setupCartUpdateListener();
         this.bindCartIconClick();
-        this.initializeCartContent();
+        this.syncWithMainCart();
       }
   
       injectCartPanel() {
@@ -141,6 +140,29 @@
         overlay?.addEventListener('click', () => this.closeCart());
       }
   
+      syncWithMainCart() {
+        // Find the main cart template on the page
+        const mainCartTemplate = document.querySelector('.template_for_cart_products_list');
+        if (mainCartTemplate) {
+          const slidingCartTemplate = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
+          if (slidingCartTemplate) {
+            slidingCartTemplate.innerHTML = mainCartTemplate.innerHTML;
+          }
+        }
+  
+        // Sync totals if available
+        const mainTotals = document.querySelector('.cart__total-list');
+        if (mainTotals) {
+          const slidingCartTotals = document.querySelector('#hmstudio-sliding-cart .cart__total-list');
+          if (slidingCartTotals) {
+            slidingCartTotals.innerHTML = mainTotals.innerHTML;
+          }
+        }
+  
+        // Check if cart is empty
+        this.updateEmptyState();
+      }
+  
       setupCartUpdateListener() {
         console.log('Setting up cart update listener...');
         
@@ -152,7 +174,7 @@
           // Call original function first
           originalCartProductsHtmlChanged(html, cart);
           
-          console.log('Cart updated:', { productsCount: cart.products_count, totals: cart.totals });
+          console.log('Cart updated:', { productsCount: cart.products_count });
           
           // Update our sliding cart
           this.updateCartContent(html, cart);
@@ -174,30 +196,10 @@
         });
       }
   
-      async initializeCartContent() {
-        console.log('Initializing cart content...');
-        
-        try {
-          // Try to get initial cart state from Zid's global cart object
-          if (window.zid?.store?.cart?.get) {
-            const cartData = await window.zid.store.cart.get();
-            if (cartData && cartData.status === 'success') {
-              console.log('Initial cart data:', cartData);
-              this.updateCartContent(cartData.data.products_list_html, cartData.data);
-            }
-          }
-        } catch (error) {
-          console.error('Error initializing cart content:', error);
-        }
-      }
-  
       updateCartContent(html, cart) {
-        console.log('Updating cart content...', { html: !!html, cart });
-        
         const slidingCart = document.getElementById('hmstudio-sliding-cart');
         if (!slidingCart) return;
   
-        // Update cart items
         const productsContainer = slidingCart.querySelector('.template_for_cart_products_list');
         const emptyMessage = slidingCart.querySelector('.sliding-cart-empty');
         const itemsContainer = slidingCart.querySelector('.sliding-cart-items');
@@ -210,9 +212,7 @@
           if (itemsContainer) itemsContainer.style.display = 'block';
           if (productsContainer && html) {
             productsContainer.innerHTML = html;
-            
-            // Re-bind quantity change events
-            this.bindQuantityEvents(productsContainer);
+            this.bindCartEvents(productsContainer);
           }
         }
   
@@ -239,11 +239,10 @@
         }
       }
   
-      bindQuantityEvents(container) {
-        // Bind quantity change events
-        const quantitySelects = container.querySelectorAll('.cart-product-quantity-dropdown select');
-        quantitySelects.forEach(select => {
-          select.addEventListener('change', async (e) => {
+      bindCartEvents(container) {
+        // Bind events to quantity selectors
+        container.querySelectorAll('.cart-product-quantity-dropdown select').forEach(select => {
+          select.addEventListener('change', (e) => {
             const row = e.target.closest('.cart-product-row');
             if (row) {
               const deleteIcon = row.querySelector('.icon-delete');
@@ -254,9 +253,8 @@
           });
         });
   
-        // Bind delete button events
-        const deleteButtons = container.querySelectorAll('.cart-product-delete a');
-        deleteButtons.forEach(button => {
+        // Bind events to delete buttons
+        container.querySelectorAll('.cart-product-delete a').forEach(button => {
           button.addEventListener('click', (e) => {
             const deleteIcon = button.querySelector('.icon-delete');
             const prefix = button.querySelector('.prefix');
@@ -264,6 +262,23 @@
             if (prefix) prefix.style.display = 'block';
           });
         });
+      }
+  
+      updateEmptyState() {
+        const slidingCart = document.getElementById('hmstudio-sliding-cart');
+        if (!slidingCart) return;
+  
+        const emptyMessage = slidingCart.querySelector('.sliding-cart-empty');
+        const itemsContainer = slidingCart.querySelector('.sliding-cart-items');
+        const productsContainer = slidingCart.querySelector('.template_for_cart_products_list');
+  
+        if (!productsContainer || !productsContainer.children.length) {
+          if (emptyMessage) emptyMessage.style.display = 'flex';
+          if (itemsContainer) itemsContainer.style.display = 'none';
+        } else {
+          if (emptyMessage) emptyMessage.style.display = 'none';
+          if (itemsContainer) itemsContainer.style.display = 'block';
+        }
       }
   
       toggleCart() {
@@ -283,9 +298,7 @@
           cart.style[direction] = '0';
           overlay.style.display = 'block';
           this.isOpen = true;
-  
-          // Refresh cart content when opening
-          this.initializeCartContent();
+          this.syncWithMainCart();
         }
       }
   
@@ -304,7 +317,4 @@
   
     // Initialize the sliding cart
     const slidingCart = new SlidingCart();
-  
-    // Make it globally accessible if needed
-    window.HMStudioSlidingCart = slidingCart;
   })();
