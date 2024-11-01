@@ -40,7 +40,7 @@
   
       async fetchCartPage() {
         try {
-          const response = await fetch('/cart');
+          const response = await fetch('/cart/view');
           const text = await response.text();
           const parser = new DOMParser();
           const doc = parser.parseFromString(text, 'text/html');
