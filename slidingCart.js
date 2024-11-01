@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.0.6
+// src/scripts/slidingCart.js v1.0.7
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -35,7 +35,10 @@
         this.createCartStructure();
         this.setupCartIconListener();
         this.setupCartUpdateListener();
-        this.fetchCartData();
+        // Initial cart fetch
+        setTimeout(() => {
+          this.fetchCartData();
+        }, 1000); // Delay initial fetch to ensure Zid is fully loaded
       }
   
       addStyles() {
@@ -74,6 +77,25 @@
             color: #666;
             margin-bottom: 10px;
           }
+          .hmstudio-quantity-select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+            background: white;
+          }
+          .hmstudio-remove-item {
+            background: none !important;
+            border: none !important;
+            color: #ff4444 !important;
+            cursor: pointer;
+            padding: 5px 10px !important;
+            font-size: 14px;
+            transition: opacity 0.3s;
+          }
+          .hmstudio-remove-item:hover {
+            opacity: 0.7;
+          }
           .hmstudio-cart-empty {
             text-align: center;
             padding: 30px 0;
@@ -87,6 +109,7 @@
             display: flex;
             justify-content: space-between;
             margin-bottom: 10px;
+            padding: 5px 0;
           }
           .hmstudio-checkout-button {
             background: #000;
@@ -118,6 +141,15 @@
           }
           .hmstudio-cart-buttons {
             margin-top: 15px;
+          }
+          .sliding-cart-header h3 {
+            font-size: 18px;
+            margin: 0;
+          }
+          .sliding-cart-close {
+            font-size: 24px !important;
+            padding: 5px !important;
+            cursor: pointer;
           }
         `;
   
@@ -151,15 +183,8 @@
               justify-content: space-between;
               align-items: center;
             ">
-              <h3 style="margin: 0;">${this.currentLanguage === 'ar' ? 'سلة التسوق' : 'Shopping Cart'}</h3>
-              <button class="sliding-cart-close" style="
-                border: none;
-                background: none;
-                font-size: 24px;
-                cursor: pointer;
-                padding: 5px;
-                line-height: 1;
-              ">×</button>
+              <h3>${this.currentLanguage === 'ar' ? 'سلة التسوق' : 'Shopping Cart'}</h3>
+              <button class="sliding-cart-close">×</button>
             </div>
             
             <div class="sliding-cart-content" style="
@@ -179,10 +204,7 @@
               <div id="hmstudio-cart-items"></div>
             </div>
             
-            <div class="sliding-cart-footer" style="
-              padding: 20px;
-              border-top: 1px solid #eee;
-            ">
+            <div class="sliding-cart-footer">
               <div id="hmstudio-cart-totals"></div>
               <div class="hmstudio-cart-buttons">
                 <a href="/checkout" class="hmstudio-checkout-button">
@@ -217,7 +239,7 @@
       }
   
       setupCartIconListener() {
-        const cartIcons = document.querySelectorAll('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart, [data-cart-icon]');
+        const cartIcons = document.querySelectorAll('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart, [data-cart-icon], .a-shopping-cart');
         cartIcons.forEach(icon => {
           icon.addEventListener('click', (e) => {
             e.preventDefault();
@@ -228,136 +250,130 @@
       }
       async fetchCartData() {
         try {
-          // Create temporary cart template if it doesn't exist
-          if (!document.querySelector('.template_for_cart_products_list')) {
-            const tempTemplate = document.createElement('div');
-            tempTemplate.className = 'template_for_cart_products_list';
-            tempTemplate.style.display = 'none';
-            document.body.appendChild(tempTemplate);
-          }
-  
-          // Trigger cart refresh
           if (window.zid && window.zid.store && window.zid.store.cart) {
-            await window.zid.store.cart.get();
+            console.log('Fetching cart data...');
+            const response = await window.zid.store.cart.addProduct({
+              formId: 'temp-form',
+              data: {
+                refresh_only: true
+              }
+            });
+            
+            if (response && response.status === 'success' && response.data && response.data.cart) {
+              console.log('Cart data received:', response.data.cart);
+              this.cartData = response.data.cart;
+              this.updateCartDisplay();
+              if (typeof window.updateCartProducts === 'function') {
+                window.updateCartProducts(response);
+              }
+            } else {
+              console.error('Invalid cart response:', response);
+            }
           }
         } catch (error) {
           console.error('Error fetching cart data:', error);
         }
       }
   
-      setupCartUpdateListener() {
-        // Create a hidden cart template if it doesn't exist
-        if (!document.querySelector('.template_for_cart_products_list')) {
-          const tempTemplate = document.createElement('div');
-          tempTemplate.className = 'template_for_cart_products_list';
-          tempTemplate.style.display = 'none';
-          document.body.appendChild(tempTemplate);
+      updateCartDisplay() {
+        const cartItemsEl = document.getElementById('hmstudio-cart-items');
+        const emptyCartEl = document.getElementById('hmstudio-cart-empty');
+        const cartTotalsEl = document.getElementById('hmstudio-cart-totals');
+        
+        console.log('Updating cart display with data:', this.cartData);
+  
+        if (!this.cartData || !this.cartData.products || this.cartData.products.length === 0) {
+          console.log('Cart is empty');
+          if (emptyCartEl) emptyCartEl.style.display = 'block';
+          if (cartItemsEl) cartItemsEl.style.display = 'none';
+          if (cartTotalsEl) cartTotalsEl.innerHTML = '';
+          return;
         }
   
-        // Override Zid's cart update handler
-        const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
-        
-        window.cartProductsHtmlChanged = (html, cart) => {
-          // Call original handler
-          originalCartProductsHtmlChanged(html, cart);
-          
-          console.log('Cart update received:', cart);
-          
-          const cartItemsEl = document.getElementById('hmstudio-cart-items');
-          const emptyCartEl = document.getElementById('hmstudio-cart-empty');
-          const cartTotalsEl = document.getElementById('hmstudio-cart-totals');
-          
-          // Handle empty cart state
-          if (!cart || !cart.products || cart.products.length === 0) {
-            if (emptyCartEl) emptyCartEl.style.display = 'block';
-            if (cartItemsEl) cartItemsEl.style.display = 'none';
-            if (cartTotalsEl) cartTotalsEl.innerHTML = '';
-            return;
-          }
+        console.log('Rendering cart items');
+        if (cartItemsEl) {
+          emptyCartEl.style.display = 'none';
+          cartItemsEl.style.display = 'block';
   
-          // Update cart items
-          if (cartItemsEl) {
-            let itemsHtml = '';
-            cart.products.forEach(product => {
-              itemsHtml += `
-                <div class="hmstudio-cart-item" data-product-id="${product.id}">
-                  <div class="hmstudio-cart-item-image">
-                    <img src="${product.image}" alt="${product.name[this.currentLanguage]}">
+          let itemsHtml = '';
+          this.cartData.products.forEach(product => {
+            const productName = product.name[this.currentLanguage] || product.name;
+            itemsHtml += `
+              <div class="hmstudio-cart-item" data-product-id="${product.id}">
+                <div class="hmstudio-cart-item-image">
+                  <img src="${product.image}" alt="${productName}">
+                </div>
+                <div class="hmstudio-cart-item-details">
+                  <a href="${product.url}" class="hmstudio-cart-item-name">${productName}</a>
+                  <div class="hmstudio-cart-item-price">
+                    ${product.formatted_price || product.price_string}
                   </div>
-                  <div class="hmstudio-cart-item-details">
-                    <a href="${product.url}" class="hmstudio-cart-item-name">
-                      ${product.name[this.currentLanguage]}
-                    </a>
-                    <div class="hmstudio-cart-item-price">
-                      ${product.formatted_price}
-                    </div>
-                    <div style="display: flex; align-items: center;">
-                      <div class="cart-product-quantity-dropdown" style="margin-right: 10px;">
-                        <select 
-                          class="form-control hmstudio-quantity-select" 
-                          data-product-id="${product.id}"
-                        >
-                          ${[1,2,3,4,5,6,7,8,9,10].map(num => 
-                            `<option value="${num}" ${product.quantity === num ? 'selected' : ''}>
-                              ${num}
-                            </option>`
-                          ).join('')}
-                        </select>
-                      </div>
-                      <button 
-                        class="hmstudio-remove-item"
-                        data-product-id="${product.id}"
-                        style="background: none; border: none; color: #ff4444; cursor: pointer; padding: 0;"
-                      >
-                        ${this.currentLanguage === 'ar' ? 'حذف' : 'Remove'}
-                      </button>
-                    </div>
+                  <div style="display: flex; align-items: center;">
+                    <select class="hmstudio-quantity-select" data-product-id="${product.id}">
+                      ${[1,2,3,4,5,6,7,8,9,10].map(num => 
+                        `<option value="${num}" ${product.quantity === num ? 'selected' : ''}>
+                          ${num}
+                        </option>`
+                      ).join('')}
+                    </select>
+                    <button class="hmstudio-remove-item" data-product-id="${product.id}">
+                      ${this.currentLanguage === 'ar' ? 'حذف' : 'Remove'}
+                    </button>
                   </div>
                 </div>
-              `;
-            });
-            
-            if (emptyCartEl) emptyCartEl.style.display = 'none';
-            cartItemsEl.style.display = 'block';
-            cartItemsEl.innerHTML = itemsHtml;
-          }
+              </div>
+            `;
+          });
   
-          // Update totals
-          if (cartTotalsEl && cart.totals) {
-            let totalsHtml = '';
-            cart.totals.forEach(total => {
-              const isTotal = total.code === 'total';
-              totalsHtml += `
-                <div class="hmstudio-total-row" style="${isTotal ? 'font-weight: bold;' : ''}">
-                  <span>${total.title}</span>
-                  <span>${total.value_string}</span>
-                </div>
-              `;
-            });
-            cartTotalsEl.innerHTML = totalsHtml;
-          }
+          cartItemsEl.innerHTML = itemsHtml;
+        }
   
-          // Update cart badge if the function exists
-          if (typeof setCartBadge === 'function') {
-            setCartBadge(cart.products_count || 0);
-          }
-        };
+        if (cartTotalsEl && this.cartData.totals) {
+          console.log('Updating cart totals');
+          let totalsHtml = '';
+          this.cartData.totals.forEach(total => {
+            const isTotal = total.code === 'total';
+            totalsHtml += `
+              <div class="hmstudio-total-row" ${isTotal ? 'style="font-weight: bold;"' : ''}>
+                <span>${total.title}</span>
+                <span>${total.value_string}</span>
+              </div>
+            `;
+          });
+          cartTotalsEl.innerHTML = totalsHtml;
+        }
+      }
   
+      setupCartUpdateListener() {
         // Handle quantity changes
         document.addEventListener('change', async (e) => {
           if (e.target.matches('.hmstudio-quantity-select')) {
             const productId = e.target.dataset.productId;
             const quantity = parseInt(e.target.value);
             
-            if (window.zid && window.zid.store && window.zid.store.cart) {
-              try {
-                await window.zid.store.cart.updateProduct({
-                  product_id: productId,
-                  quantity: quantity
+            try {
+              if (window.zid && window.zid.store && window.zid.store.cart) {
+                console.log('Updating quantity:', productId, quantity);
+                e.target.disabled = true;
+                
+                const response = await window.zid.store.cart.addProduct({
+                  formId: 'temp-form',
+                  data: {
+                    product_id: productId,
+                    quantity: quantity
+                  }
                 });
-              } catch (error) {
-                console.error('Error updating quantity:', error);
+  
+                if (response.status === 'success') {
+                  this.cartData = response.data.cart;
+                  this.updateCartDisplay();
+                }
+                
+                e.target.disabled = false;
               }
+            } catch (error) {
+              console.error('Error updating quantity:', error);
+              e.target.disabled = false;
             }
           }
         });
@@ -367,18 +383,40 @@
           if (e.target.matches('.hmstudio-remove-item')) {
             e.preventDefault();
             const productId = e.target.dataset.productId;
+            const originalText = e.target.textContent;
             
-            if (window.zid && window.zid.store && window.zid.store.cart) {
-              try {
-                await window.zid.store.cart.removeProduct({
-                  product_id: productId
-                });
-              } catch (error) {
-                console.error('Error removing product:', error);
+            try {
+              if (window.zid && window.zid.store && window.zid.store.cart) {
+                console.log('Removing product:', productId);
+                e.target.textContent = this.currentLanguage === 'ar' ? 'جارٍ الحذف...' : 'Removing...';
+                e.target.disabled = true;
+                
+                const response = await window.zid.store.cart.removeProduct(productId);
+                
+                if (response.status === 'success') {
+                  await this.fetchCartData();
+                }
               }
+            } catch (error) {
+              console.error('Error removing product:', error);
+              e.target.textContent = originalText;
+              e.target.disabled = false;
             }
           }
         });
+  
+        // Listen for cart updates from other sources
+        if (typeof window.cartProductsHtmlChanged === 'function') {
+          const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged;
+          window.cartProductsHtmlChanged = (html, cart) => {
+            originalCartProductsHtmlChanged(html, cart);
+            if (cart) {
+              console.log('Cart update detected from external source');
+              this.cartData = cart;
+              this.updateCartDisplay();
+            }
+          };
+        }
       }
   
       openCart() {
