@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.0.3
+// src/scripts/slidingCart.js v1.0.4
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -22,102 +22,119 @@
       return;
     }
   
-    // Add styles to the document
-    const styles = `
-      .cart-product-row {
-        display: flex;
-        padding: 15px 0;
-        border-bottom: 1px solid #eee;
-      }
-  
-      .cart-product-image {
-        width: 80px;
-        height: 80px;
-        margin-right: 15px;
-      }
-  
-      .cart-product-image img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 4px;
-      }
-  
-      .cart-product-info {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-      }
-  
-      .cart-product-name {
-        font-weight: bold;
-        margin-bottom: 5px;
-      }
-  
-      .cart-product-price {
-        color: #666;
-        margin-bottom: 10px;
-      }
-  
-      .cart-product-quantity-dropdown {
-        margin-bottom: 10px;
-      }
-  
-      .cart-product-quantity-dropdown select {
-        padding: 5px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        width: 70px;
-      }
-  
-      .cart-product-delete a {
-        color: #ff4444;
-        text-decoration: none;
-        font-size: 20px;
-      }
-  
-      [dir="rtl"] .cart-product-image {
-        margin-right: 0;
-        margin-left: 15px;
-      }
-    `;
-  
-    const styleSheet = document.createElement('style');
-    styleSheet.textContent = styles;
-    document.head.appendChild(styleSheet);
-  
     class SlidingCart {
       constructor() {
         this.isOpen = false;
         this.currentLanguage = getCurrentLanguage();
+        this.cartData = null;
         this.initialize();
       }
   
-      async initialize() {
+      initialize() {
+        // Add styles to head
+        this.addStyles();
         this.createCartStructure();
         this.setupCartIconListener();
         this.setupCartUpdateListener();
-        await this.fetchCartData();
+        this.fetchCartData();
       }
   
-      async fetchCartData() {
-        try {
-          const cartData = await zid.store.cart.get();
-          console.log('Fetched cart data:', cartData);
-  
-          if (cartData && cartData.data) {
-            this.updateCartFromResponse(cartData.data);
+      addStyles() {
+        const styles = `
+          .hmstudio-sliding-cart {
+            font-family: inherit;
           }
-        } catch (error) {
-          console.error('Error fetching cart data:', error);
-        }
+          .hmstudio-cart-item {
+            display: flex;
+            gap: 15px;
+            padding: 15px 0;
+            border-bottom: 1px solid #eee;
+          }
+          .hmstudio-cart-item-image {
+            width: 80px;
+            height: 80px;
+            flex-shrink: 0;
+          }
+          .hmstudio-cart-item-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 4px;
+          }
+          .hmstudio-cart-item-details {
+            flex-grow: 1;
+          }
+          .hmstudio-cart-item-name {
+            font-weight: bold;
+            color: #333;
+            text-decoration: none;
+            margin-bottom: 5px;
+            display: block;
+          }
+          .hmstudio-cart-item-price {
+            color: #666;
+            margin-bottom: 10px;
+          }
+          .hmstudio-quantity-select {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+          }
+          .hmstudio-remove-item {
+            color: #ff4444;
+            text-decoration: none;
+            font-size: 14px;
+          }
+          .hmstudio-cart-empty {
+            text-align: center;
+            padding: 30px 0;
+          }
+          .hmstudio-cart-footer {
+            background: #f9f9f9;
+            padding: 15px;
+            margin-top: auto;
+          }
+          .hmstudio-total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+          }
+          .hmstudio-checkout-button {
+            background: #000;
+            color: #fff;
+            padding: 12px;
+            text-align: center;
+            border-radius: 4px;
+            text-decoration: none;
+            display: block;
+            margin-top: 15px;
+          }
+          .hmstudio-view-cart-button {
+            background: #f0f0f0;
+            color: #333;
+            padding: 12px;
+            text-align: center;
+            border-radius: 4px;
+            text-decoration: none;
+            display: block;
+            margin-top: 10px;
+          }
+          .hmstudio-cart-buttons {
+            margin-top: 15px;
+          }
+        `;
+  
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = styles;
+        document.head.appendChild(styleSheet);
       }
   
       createCartStructure() {
         const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
         
         const cartHTML = `
-          <div id="hmstudio-sliding-cart" style="
+          <div id="hmstudio-sliding-cart" class="hmstudio-sliding-cart" style="
             position: fixed;
             top: 0;
             ${direction}: -400px;
@@ -129,6 +146,7 @@
             z-index: 9999;
             display: flex;
             flex-direction: column;
+            direction: ${this.currentLanguage === 'ar' ? 'rtl' : 'ltr'};
           ">
             <div class="sliding-cart-header" style="
               padding: 20px;
@@ -144,6 +162,7 @@
                 font-size: 24px;
                 cursor: pointer;
                 padding: 5px;
+                line-height: 1;
               ">×</button>
             </div>
             
@@ -152,44 +171,31 @@
               overflow-y: auto;
               padding: 20px;
             ">
-              <div class="cart__empty mt-5" style="display: none; flex-direction: column; align-items: center;">
-                <div class="cart__empty-icon">
-                  <img loading="lazy" src="/assets/images/shopping-bag-empty.gif" alt="empty_cart" width="150" height="150">
-                </div>
-                <h1 class="cart__empty-text my-5">${this.currentLanguage === 'ar' ? 'السلة فارغة' : 'Cart is empty'}</h1>
-                <a href="/" class="no-btn-style common-btn cart__empty-btn mt-5">
-                  ${this.currentLanguage === 'ar' ? 'العودة للتسوق' : 'Continue Shopping'}
+              <div id="hmstudio-cart-empty" class="hmstudio-cart-empty" style="display: none;">
+                <img src="/assets/images/shopping-bag-empty.gif" alt="Empty Cart" style="width: 150px; margin-bottom: 20px;">
+                <p style="margin: 10px 0;">
+                  ${this.currentLanguage === 'ar' ? 'السلة فارغة' : 'Your cart is empty'}
+                </p>
+                <a href="/" class="hmstudio-checkout-button">
+                  ${this.currentLanguage === 'ar' ? 'تسوق الآن' : 'Shop Now'}
                 </a>
               </div>
               
-              <div class="cart__items">
-                <div class="template_for_cart_products_list"></div>
-              </div>
+              <div id="hmstudio-cart-items"></div>
             </div>
             
             <div class="sliding-cart-footer" style="
               padding: 20px;
               border-top: 1px solid #eee;
             ">
-              <div class="cart__total-list" style="margin-bottom: 15px;"></div>
-              <div class="sliding-cart-actions" style="display: flex; flex-direction: column; gap: 10px;">
-                <a href="/cart/view" class="no-btn-style common-btn" style="
-                  text-align: center;
-                  padding: 10px;
-                  background: #f0f0f0;
-                  color: #333;
-                  text-decoration: none;
-                  border-radius: 4px;
-                ">${this.currentLanguage === 'ar' ? 'عرض السلة' : 'View Cart'}</a>
-                
-                <a href="/checkout" class="no-btn-style common-btn" style="
-                  text-align: center;
-                  padding: 10px;
-                  background: #000;
-                  color: #fff;
-                  text-decoration: none;
-                  border-radius: 4px;
-                ">${this.currentLanguage === 'ar' ? 'إتمام الطلب' : 'Checkout'}</a>
+              <div id="hmstudio-cart-totals"></div>
+              <div class="hmstudio-cart-buttons">
+                <a href="/checkout" class="hmstudio-checkout-button">
+                  ${this.currentLanguage === 'ar' ? 'إتمام الطلب' : 'Checkout'}
+                </a>
+                <a href="/cart/view" class="hmstudio-view-cart-button">
+                  ${this.currentLanguage === 'ar' ? 'عرض السلة' : 'View Cart'}
+                </a>
               </div>
             </div>
           </div>
@@ -226,99 +232,128 @@
         });
       }
   
-      updateCartFromResponse(cartData) {
-        const slidingCart = document.getElementById('hmstudio-sliding-cart');
-        if (!slidingCart) return;
-  
-        const productsContainer = slidingCart.querySelector('.template_for_cart_products_list');
-        const emptyCartMessage = slidingCart.querySelector('.cart__empty');
-        const cartItems = slidingCart.querySelector('.cart__items');
-  
-        if (!cartData.cart || cartData.cart.products_count <= 0) {
-          if (emptyCartMessage) emptyCartMessage.style.display = 'flex';
-          if (cartItems) cartItems.style.display = 'none';
-          return;
-        }
-  
-        if (emptyCartMessage) emptyCartMessage.style.display = 'none';
-        if (cartItems) cartItems.style.display = 'block';
-  
-        if (productsContainer && cartData.cart.products) {
-          let productsHTML = '';
-          cartData.cart.products.forEach(product => {
-            productsHTML += `
-              <div class="cart-product-row" data-product-id="${product.id}">
-                <div class="cart-product-image">
-                  <img src="${product.image}" alt="${product.name[this.currentLanguage]}" />
-                </div>
-                <div class="cart-product-info">
-                  <div class="cart-product-name">
-                    ${product.name[this.currentLanguage]}
-                  </div>
-                  <div class="cart-product-price">
-                    ${product.formatted_price}
-                  </div>
-                  <div class="cart-product-quantity-dropdown">
-                    <select class="form-control" onchange="zid.store.cart.updateProduct(${product.id}, this.value)">
-                      ${this.generateQuantityOptions(product.quantity)}
-                    </select>
-                  </div>
-                  <div class="cart-product-delete">
-                    <a href="#" onclick="zid.store.cart.deleteProduct(${product.id}); return false;">
-                      <span class="icon-delete">×</span>
-                      <span class="prefix" style="display: none;">...</span>
-                    </a>
-                  </div>
-                </div>
-              </div>
-            `;
-          });
-          productsContainer.innerHTML = productsHTML;
-        }
-  
-        if (cartData.cart.totals) {
-          const totalsContainer = slidingCart.querySelector('.cart__total-list');
-          if (totalsContainer) {
-            let totalsHTML = '';
-            cartData.cart.totals.forEach(total => {
-              const totalClass = total.code === 'total' ? 'cart__total-item--total' : 'cart__total-item';
-              totalsHTML += `
-                <div class="${totalClass}" style="
-                  display: flex;
-                  justify-content: space-between;
-                  margin-bottom: 10px;
-                  ${total.code === 'total' ? 'font-weight: bold;' : ''}
-                ">
-                  <span>${total.title}</span>
-                  <span>${total.value_string}</span>
-                </div>
-              `;
-            });
-            totalsContainer.innerHTML = totalsHTML;
+      async fetchCartData() {
+        try {
+          if (window.zid && window.zid.store && window.zid.store.cart) {
+            const response = await window.zid.store.cart.get();
+            if (response && response.status === 'success') {
+              this.cartData = response.data;
+              this.updateCartDisplay();
+            }
           }
+        } catch (error) {
+          console.error('Error fetching cart data:', error);
         }
-      }
-  
-      generateQuantityOptions(currentQuantity) {
-        let options = '';
-        for (let i = 1; i <= 20; i++) {
-          options += `<option value="${i}" ${i === currentQuantity ? 'selected' : ''}>${i}</option>`;
-        }
-        return options;
       }
   
       setupCartUpdateListener() {
-        const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
-        
-        window.cartProductsHtmlChanged = (html, cart) => {
-          originalCartProductsHtmlChanged(html, cart);
-          this.fetchCartData();
-        };
+        if (window.zid && window.zid.store && window.zid.store.cart) {
+          const originalCartUpdate = window.zid.store.cart.update;
+          window.zid.store.cart.update = async (...args) => {
+            const result = await originalCartUpdate.apply(window.zid.store.cart, args);
+            if (result.status === 'success') {
+              await this.fetchCartData();
+            }
+            return result;
+          };
+        }
   
-        if (typeof zid !== 'undefined' && zid.store && zid.store.cart) {
-          document.addEventListener('zid-cart-update', () => {
-            this.fetchCartData();
-          });
+        // Setup product quantity change handler
+        document.addEventListener('change', async (e) => {
+          if (e.target.matches('.hmstudio-quantity-select')) {
+            const productId = e.target.dataset.productId;
+            const quantity = parseInt(e.target.value);
+            
+            try {
+              await window.zid.store.cart.updateProduct({
+                product_id: productId,
+                quantity: quantity
+              });
+              await this.fetchCartData();
+            } catch (error) {
+              console.error('Error updating quantity:', error);
+            }
+          }
+        });
+  
+        // Setup product removal handler
+        document.addEventListener('click', async (e) => {
+          if (e.target.matches('.hmstudio-remove-item')) {
+            e.preventDefault();
+            const productId = e.target.dataset.productId;
+            
+            try {
+              await window.zid.store.cart.removeProduct(productId);
+              await this.fetchCartData();
+            } catch (error) {
+              console.error('Error removing product:', error);
+            }
+          }
+        });
+      }
+  
+      updateCartDisplay() {
+        const emptyCartEl = document.getElementById('hmstudio-cart-empty');
+        const cartItemsEl = document.getElementById('hmstudio-cart-items');
+        const cartTotalsEl = document.getElementById('hmstudio-cart-totals');
+  
+        if (!this.cartData || this.cartData.products_count === 0) {
+          emptyCartEl.style.display = 'block';
+          cartItemsEl.style.display = 'none';
+          cartTotalsEl.innerHTML = '';
+          return;
+        }
+  
+        emptyCartEl.style.display = 'none';
+        cartItemsEl.style.display = 'block';
+  
+        // Update cart items
+        let itemsHTML = '';
+        this.cartData.products.forEach(product => {
+          itemsHTML += `
+            <div class="hmstudio-cart-item">
+              <div class="hmstudio-cart-item-image">
+                <img src="${product.image}" alt="${product.name[this.currentLanguage]}">
+              </div>
+              <div class="hmstudio-cart-item-details">
+                <a href="${product.url}" class="hmstudio-cart-item-name">
+                  ${product.name[this.currentLanguage]}
+                </a>
+                <div class="hmstudio-cart-item-price">${product.formatted_price}</div>
+                <div style="display: flex; align-items: center;">
+                  <select class="hmstudio-quantity-select" data-product-id="${product.id}">
+                    ${[1,2,3,4,5,6,7,8,9,10].map(num => 
+                      `<option value="${num}" ${product.quantity === num ? 'selected' : ''}>
+                        ${num}
+                      </option>`
+                    ).join('')}
+                  </select>
+                  <a href="#" class="hmstudio-remove-item" data-product-id="${product.id}">
+                    ${this.currentLanguage === 'ar' ? 'حذف' : 'Remove'}
+                  </a>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        cartItemsEl.innerHTML = itemsHTML;
+  
+        // Update totals
+        let totalsHTML = '';
+        this.cartData.totals.forEach(total => {
+          const isTotal = total.code === 'total';
+          totalsHTML += `
+            <div class="hmstudio-total-row" style="${isTotal ? 'font-weight: bold;' : ''}">
+              <span>${total.title}</span>
+              <span>${total.value_string}</span>
+            </div>
+          `;
+        });
+        cartTotalsEl.innerHTML = totalsHTML;
+  
+        // Update cart badge if function exists
+        if (typeof setCartBadge === 'function') {
+          setCartBadge(this.cartData.products_count);
         }
       }
   
@@ -328,6 +363,7 @@
         const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
         
         if (cart && overlay) {
+          this.fetchCartData();
           cart.style[direction] = '0';
           overlay.style.display = 'block';
           this.isOpen = true;
