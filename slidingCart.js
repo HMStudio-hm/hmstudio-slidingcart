@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.0.8
+// src/scripts/slidingCart.js v1.0.9
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -13,12 +13,19 @@
       }
   
       initialize() {
-        // Create hidden template container that Zid requires
+        // Create template container if it doesn't exist
         if (!document.querySelector('.template_for_cart_products_list')) {
           const tempTemplate = document.createElement('div');
           tempTemplate.className = 'template_for_cart_products_list';
           tempTemplate.style.display = 'none';
           document.body.appendChild(tempTemplate);
+        }
+  
+        // Create container for cart scripts
+        if (!document.querySelector('#cart-view-scripts')) {
+          const scriptsContainer = document.createElement('div');
+          scriptsContainer.id = 'cart-view-scripts';
+          document.body.appendChild(scriptsContainer);
         }
   
         this.addStyles();
@@ -206,13 +213,15 @@
         
         // Override the function
         window.cartProductsHtmlChanged = (html, cart) => {
-          // Update original cart
+          // Call original handler
           originalCartProductsHtmlChanged(html, cart);
           
-          // Update our sliding cart
+          console.log('Cart updated:', cart);
+          
+          // Update sliding cart template
           const slidingCartTemplate = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
           if (slidingCartTemplate) {
-            slidingCartTemplate.innerHTML = html;
+            slidingCartTemplate.innerHTML = html || '';
           }
   
           // Update totals
@@ -231,6 +240,20 @@
               totalsList.innerHTML = totalsHtml;
             }
           }
+  
+          // Show/hide cart based on products count
+          if (cart) {
+            const emptyMessage = this.currentLanguage === 'ar' ? 'السلة فارغة' : 'Your cart is empty';
+            const cartItems = document.querySelector('#hmstudio-sliding-cart .hmstudio-cart-items');
+            
+            if (cart.products_count <= 0) {
+              cartItems.innerHTML = `
+                <div class="hmstudio-cart-empty">
+                  <p>${emptyMessage}</p>
+                </div>
+              `;
+            }
+          }
         };
       }
   
@@ -240,17 +263,16 @@
         const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
         
         if (cart && overlay) {
+          // Show cart and overlay
           cart.style[direction] = '0';
           overlay.style.display = 'block';
           
-          // Use Zid's existing cart refresh mechanism
-          if (window.zid && window.zid.store && window.zid.store.cart) {
-            window.zid.store.cart.addProduct({ 
-              formId: 'temp-form',
-              data: {
-                refresh_only: true
-              }
-            });
+          // Get current cart HTML from main cart if it exists
+          const mainCartTemplate = document.querySelector('.template_for_cart_products_list');
+          const slidingCartTemplate = cart.querySelector('.template_for_cart_products_list');
+          
+          if (mainCartTemplate && slidingCartTemplate) {
+            slidingCartTemplate.innerHTML = mainCartTemplate.innerHTML;
           }
         }
       }
