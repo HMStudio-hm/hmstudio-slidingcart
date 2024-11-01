@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.0.1
+// src/scripts/slidingCart.js v1.0.2
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -97,7 +97,7 @@
             ">
               <div class="cart__total-list" style="margin-bottom: 15px;"></div>
               <div class="sliding-cart-actions" style="display: flex; flex-direction: column; gap: 10px;">
-                <a href="/cart" class="no-btn-style common-btn" style="
+                <a href="cart/view" class="no-btn-style common-btn" style="
                   text-align: center;
                   padding: 10px;
                   background: #f0f0f0;
@@ -106,7 +106,7 @@
                   border-radius: 4px;
                 ">${this.currentLanguage === 'ar' ? 'عرض السلة' : 'View Cart'}</a>
                 
-                <a href="/checkout" class="no-btn-style common-btn" style="
+                <a href="/auth/login?redirect_to=/checkout/choose-address-and-shipping" class="no-btn-style common-btn" style="
                   text-align: center;
                   padding: 10px;
                   background: #000;
