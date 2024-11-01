@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.0.2
+// src/scripts/slidingCart.js v1.0.3
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -22,6 +22,70 @@
       return;
     }
   
+    // Add styles to the document
+    const styles = `
+      .cart-product-row {
+        display: flex;
+        padding: 15px 0;
+        border-bottom: 1px solid #eee;
+      }
+  
+      .cart-product-image {
+        width: 80px;
+        height: 80px;
+        margin-right: 15px;
+      }
+  
+      .cart-product-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 4px;
+      }
+  
+      .cart-product-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+  
+      .cart-product-name {
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+  
+      .cart-product-price {
+        color: #666;
+        margin-bottom: 10px;
+      }
+  
+      .cart-product-quantity-dropdown {
+        margin-bottom: 10px;
+      }
+  
+      .cart-product-quantity-dropdown select {
+        padding: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 70px;
+      }
+  
+      .cart-product-delete a {
+        color: #ff4444;
+        text-decoration: none;
+        font-size: 20px;
+      }
+  
+      [dir="rtl"] .cart-product-image {
+        margin-right: 0;
+        margin-left: 15px;
+      }
+    `;
+  
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = styles;
+    document.head.appendChild(styleSheet);
+  
     class SlidingCart {
       constructor() {
         this.isOpen = false;
@@ -29,12 +93,24 @@
         this.initialize();
       }
   
-      initialize() {
+      async initialize() {
         this.createCartStructure();
         this.setupCartIconListener();
         this.setupCartUpdateListener();
-        // Initial cart content fetch
-        this.fetchInitialCartContent();
+        await this.fetchCartData();
+      }
+  
+      async fetchCartData() {
+        try {
+          const cartData = await zid.store.cart.get();
+          console.log('Fetched cart data:', cartData);
+  
+          if (cartData && cartData.data) {
+            this.updateCartFromResponse(cartData.data);
+          }
+        } catch (error) {
+          console.error('Error fetching cart data:', error);
+        }
       }
   
       createCartStructure() {
@@ -97,7 +173,7 @@
             ">
               <div class="cart__total-list" style="margin-bottom: 15px;"></div>
               <div class="sliding-cart-actions" style="display: flex; flex-direction: column; gap: 10px;">
-                <a href="cart/view" class="no-btn-style common-btn" style="
+                <a href="/cart/view" class="no-btn-style common-btn" style="
                   text-align: center;
                   padding: 10px;
                   background: #f0f0f0;
@@ -106,7 +182,7 @@
                   border-radius: 4px;
                 ">${this.currentLanguage === 'ar' ? 'عرض السلة' : 'View Cart'}</a>
                 
-                <a href="/auth/login?redirect_to=/checkout/choose-address-and-shipping" class="no-btn-style common-btn" style="
+                <a href="/checkout" class="no-btn-style common-btn" style="
                   text-align: center;
                   padding: 10px;
                   background: #000;
@@ -140,7 +216,6 @@
       }
   
       setupCartIconListener() {
-        // Find cart icon and add click handler
         const cartIcons = document.querySelectorAll('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart, [data-cart-icon]');
         cartIcons.forEach(icon => {
           icon.addEventListener('click', (e) => {
@@ -151,96 +226,61 @@
         });
       }
   
-      async fetchInitialCartContent() {
-        try {
-          // Get the cart template content from the page
-          const templateContent = document.querySelector('.template_for_cart_products_list');
-          if (templateContent) {
-            const slidingCartTemplate = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
-            if (slidingCartTemplate) {
-              slidingCartTemplate.innerHTML = templateContent.innerHTML;
-            }
-          }
-  
-          // Get totals if available
-          const totalsContent = document.querySelector('.cart__total-list');
-          if (totalsContent) {
-            const slidingCartTotals = document.querySelector('#hmstudio-sliding-cart .cart__total-list');
-            if (slidingCartTotals) {
-              slidingCartTotals.innerHTML = totalsContent.innerHTML;
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching initial cart content:', error);
-        }
-      }
-  
-      setupCartUpdateListener() {
-        // Store the original function
-        const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
-        
-        // Override the function
-        window.cartProductsHtmlChanged = (html, cart) => {
-          // Call original function
-          originalCartProductsHtmlChanged(html, cart);
-          
-          // Update our sliding cart
-          this.updateCartContent(html, cart);
-        };
-  
-        // Add quantity change handler
-        document.addEventListener('click', (e) => {
-          if (e.target.matches('#hmstudio-sliding-cart .cart-product-quantity-dropdown select')) {
-            const select = e.target;
-            select.addEventListener('change', async () => {
-              const productRow = select.closest('.cart-product-row');
-              if (productRow) {
-                productRow.querySelector('.icon-delete').style.display = 'none';
-                productRow.querySelector('.prefix').style.display = 'block';
-              }
-            });
-          }
-        });
-  
-        // Add delete product handler
-        document.addEventListener('click', (e) => {
-          if (e.target.matches('#hmstudio-sliding-cart .cart-product-delete a')) {
-            e.preventDefault();
-            const deleteBtn = e.target;
-            const icon = deleteBtn.querySelector('.icon-delete');
-            const prefix = deleteBtn.querySelector('.prefix');
-            if (icon && prefix) {
-              icon.style.display = 'none';
-              prefix.style.display = 'block';
-            }
-          }
-        });
-      }
-  
-      updateCartContent(html, cart) {
+      updateCartFromResponse(cartData) {
         const slidingCart = document.getElementById('hmstudio-sliding-cart');
         if (!slidingCart) return;
   
-        // Update products list
         const productsContainer = slidingCart.querySelector('.template_for_cart_products_list');
         const emptyCartMessage = slidingCart.querySelector('.cart__empty');
         const cartItems = slidingCart.querySelector('.cart__items');
   
-        if (cart.products_count <= 0) {
+        if (!cartData.cart || cartData.cart.products_count <= 0) {
           if (emptyCartMessage) emptyCartMessage.style.display = 'flex';
           if (cartItems) cartItems.style.display = 'none';
-        } else {
-          if (emptyCartMessage) emptyCartMessage.style.display = 'none';
-          if (cartItems) cartItems.style.display = 'block';
-          if (productsContainer) productsContainer.innerHTML = html;
+          return;
         }
   
-        // Update totals
-        if (cart.totals) {
+        if (emptyCartMessage) emptyCartMessage.style.display = 'none';
+        if (cartItems) cartItems.style.display = 'block';
+  
+        if (productsContainer && cartData.cart.products) {
+          let productsHTML = '';
+          cartData.cart.products.forEach(product => {
+            productsHTML += `
+              <div class="cart-product-row" data-product-id="${product.id}">
+                <div class="cart-product-image">
+                  <img src="${product.image}" alt="${product.name[this.currentLanguage]}" />
+                </div>
+                <div class="cart-product-info">
+                  <div class="cart-product-name">
+                    ${product.name[this.currentLanguage]}
+                  </div>
+                  <div class="cart-product-price">
+                    ${product.formatted_price}
+                  </div>
+                  <div class="cart-product-quantity-dropdown">
+                    <select class="form-control" onchange="zid.store.cart.updateProduct(${product.id}, this.value)">
+                      ${this.generateQuantityOptions(product.quantity)}
+                    </select>
+                  </div>
+                  <div class="cart-product-delete">
+                    <a href="#" onclick="zid.store.cart.deleteProduct(${product.id}); return false;">
+                      <span class="icon-delete">×</span>
+                      <span class="prefix" style="display: none;">...</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+          productsContainer.innerHTML = productsHTML;
+        }
+  
+        if (cartData.cart.totals) {
           const totalsContainer = slidingCart.querySelector('.cart__total-list');
           if (totalsContainer) {
             let totalsHTML = '';
-            cart.totals.forEach(total => {
+            cartData.cart.totals.forEach(total => {
               const totalClass = total.code === 'total' ? 'cart__total-item--total' : 'cart__total-item';
               totalsHTML += `
                 <div class="${totalClass}" style="
@@ -256,6 +296,29 @@
             });
             totalsContainer.innerHTML = totalsHTML;
           }
+        }
+      }
+  
+      generateQuantityOptions(currentQuantity) {
+        let options = '';
+        for (let i = 1; i <= 20; i++) {
+          options += `<option value="${i}" ${i === currentQuantity ? 'selected' : ''}>${i}</option>`;
+        }
+        return options;
+      }
+  
+      setupCartUpdateListener() {
+        const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
+        
+        window.cartProductsHtmlChanged = (html, cart) => {
+          originalCartProductsHtmlChanged(html, cart);
+          this.fetchCartData();
+        };
+  
+        if (typeof zid !== 'undefined' && zid.store && zid.store.cart) {
+          document.addEventListener('zid-cart-update', () => {
+            this.fetchCartData();
+          });
         }
       }
   
