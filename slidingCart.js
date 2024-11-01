@@ -126,7 +126,7 @@
   
       setupCartIconListener() {
         // Find the store's cart icon
-        const cartIcon = document.querySelector('.cart-icon, .header-cart-icon'); // Adjust selectors based on store theme
+        const cartIcon = document.querySelector('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart'); // Adjust selectors based on store theme
         if (cartIcon) {
           cartIcon.addEventListener('click', (e) => {
             e.preventDefault();
