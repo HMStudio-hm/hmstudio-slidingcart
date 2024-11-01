@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.0.9
+// src/scripts/slidingCart.js v1.1.0
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -13,25 +13,11 @@
       }
   
       initialize() {
-        // Create template container if it doesn't exist
-        if (!document.querySelector('.template_for_cart_products_list')) {
-          const tempTemplate = document.createElement('div');
-          tempTemplate.className = 'template_for_cart_products_list';
-          tempTemplate.style.display = 'none';
-          document.body.appendChild(tempTemplate);
-        }
-  
-        // Create container for cart scripts
-        if (!document.querySelector('#cart-view-scripts')) {
-          const scriptsContainer = document.createElement('div');
-          scriptsContainer.id = 'cart-view-scripts';
-          document.body.appendChild(scriptsContainer);
-        }
-  
         this.addStyles();
         this.createCartStructure();
         this.setupCartIconListener();
         this.setupCartUpdateListener();
+        this.initializeCartContent();
       }
   
       addStyles() {
@@ -39,7 +25,7 @@
           .hmstudio-sliding-cart {
             font-family: inherit;
           }
-          .hmstudio-cart-items {
+          .cart__items-container {
             padding: 15px;
           }
           .cart-product-row {
@@ -81,9 +67,10 @@
             color: #ff4444;
             text-decoration: none;
           }
-          .hmstudio-cart-empty {
+          .cart__empty {
             text-align: center;
             padding: 30px 0;
+            display: none;
           }
           .hmstudio-cart-footer {
             background: #f9f9f9;
@@ -103,26 +90,6 @@
             border-top: 1px solid #ddd;
             margin-top: 5px;
             padding-top: 10px;
-          }
-          .hmstudio-checkout-button {
-            background: #000;
-            color: #fff !important;
-            padding: 12px;
-            text-align: center;
-            border-radius: 4px;
-            text-decoration: none;
-            display: block;
-            margin-top: 15px;
-          }
-          .hmstudio-view-cart-button {
-            background: #f0f0f0;
-            color: #333 !important;
-            padding: 12px;
-            text-align: center;
-            border-radius: 4px;
-            text-decoration: none;
-            display: block;
-            margin-top: 10px;
           }
         `;
   
@@ -157,7 +124,7 @@
               align-items: center;
             ">
               <h3 style="margin: 0;">${this.currentLanguage === 'ar' ? 'سلة التسوق' : 'Shopping Cart'}</h3>
-              <button onclick="this.closest('#hmstudio-sliding-cart').style.${direction}='-400px';document.getElementById('hmstudio-sliding-cart-overlay').style.display='none'" style="
+              <button class="sliding-cart-close" style="
                 border: none;
                 background: none;
                 font-size: 24px;
@@ -166,17 +133,35 @@
               ">×</button>
             </div>
             
-            <div style="flex-grow: 1; overflow-y: auto;" class="hmstudio-cart-items">
-              <div class="template_for_cart_products_list"></div>
+            <div style="flex-grow: 1; overflow-y: auto;">
+              <!-- Empty cart message -->
+              <div class="cart__empty" style="display: none;">
+                <div class="cart__empty-icon">
+                  <img loading="lazy" src="/assets/images/shopping-bag-empty.gif" alt="empty_cart" width="150" height="150">
+                </div>
+                <h1 class="cart__empty-text my-5">
+                  ${this.currentLanguage === 'ar' ? 'السلة فارغة' : 'Your cart is empty'}
+                </h1>
+                <a href="/" class="no-btn-style common-btn cart__empty-btn mt-5">
+                  ${this.currentLanguage === 'ar' ? 'تسوق الآن' : 'Shop Now'}
+                </a>
+              </div>
+  
+              <!-- Cart items container matching Zid's structure -->
+              <div class="cart__items-container">
+                <div class="cart__items">
+                  <div class="template_for_cart_products_list"></div>
+                </div>
+              </div>
             </div>
             
             <div class="hmstudio-cart-footer">
               <div class="cart__total-list"></div>
-              <div>
-                <a href="/checkout" class="hmstudio-checkout-button">
+              <div class="cart__total-container">
+                <a href="/checkout" class="no-btn-style common-btn">
                   ${this.currentLanguage === 'ar' ? 'إتمام الطلب' : 'Checkout'}
                 </a>
-                <a href="/cart/view" class="hmstudio-view-cart-button">
+                <a href="/cart/view" class="no-btn-style cart__total-coutinue">
                   ${this.currentLanguage === 'ar' ? 'عرض السلة' : 'View Cart'}
                 </a>
               </div>
@@ -196,12 +181,20 @@
         `;
   
         document.body.insertAdjacentHTML('beforeend', cartHTML);
+  
+        // Add close handlers
+        const closeBtn = document.querySelector('.sliding-cart-close');
+        const overlay = document.getElementById('hmstudio-sliding-cart-overlay');
+        
+        closeBtn.addEventListener('click', () => this.closeCart());
+        overlay.addEventListener('click', () => this.closeCart());
       }
   
       setupCartIconListener() {
         document.addEventListener('click', (e) => {
           if (e.target.closest('.cart-icon, .header-cart-icon, [data-cart-icon], a-shopping-cart, .a-shopping-cart')) {
             e.preventDefault();
+            e.stopPropagation();
             this.openCart();
           }
         });
@@ -211,17 +204,29 @@
         // Store original function
         const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
         
-        // Override the function
+        // Override with our version
         window.cartProductsHtmlChanged = (html, cart) => {
           // Call original handler
           originalCartProductsHtmlChanged(html, cart);
           
-          console.log('Cart updated:', cart);
+          console.log('Cart updated:', { html, cart });
           
-          // Update sliding cart template
-          const slidingCartTemplate = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
-          if (slidingCartTemplate) {
-            slidingCartTemplate.innerHTML = html || '';
+          // Update both the main cart and our sliding cart
+          const templates = document.querySelectorAll('.template_for_cart_products_list');
+          templates.forEach(template => {
+            template.innerHTML = html || '';
+          });
+  
+          // Update empty cart visibility
+          const emptyCart = document.querySelector('#hmstudio-sliding-cart .cart__empty');
+          const itemsContainer = document.querySelector('#hmstudio-sliding-cart .cart__items-container');
+          
+          if (cart && cart.products_count <= 0) {
+            if (emptyCart) emptyCart.style.display = 'block';
+            if (itemsContainer) itemsContainer.style.display = 'none';
+          } else {
+            if (emptyCart) emptyCart.style.display = 'none';
+            if (itemsContainer) itemsContainer.style.display = 'block';
           }
   
           // Update totals
@@ -231,7 +236,7 @@
               let totalsHtml = '';
               cart.totals.forEach(total => {
                 totalsHtml += `
-                  <div class="cart__total-item${total.code === 'total' ? '--total' : ''}">
+                  <div class="${total.code === 'total' ? 'cart__total-item--total' : 'cart__total-item'}">
                     <div>${total.title}</div>
                     <div>${total.value_string}</div>
                   </div>
@@ -240,21 +245,31 @@
               totalsList.innerHTML = totalsHtml;
             }
           }
-  
-          // Show/hide cart based on products count
-          if (cart) {
-            const emptyMessage = this.currentLanguage === 'ar' ? 'السلة فارغة' : 'Your cart is empty';
-            const cartItems = document.querySelector('#hmstudio-sliding-cart .hmstudio-cart-items');
-            
-            if (cart.products_count <= 0) {
-              cartItems.innerHTML = `
-                <div class="hmstudio-cart-empty">
-                  <p>${emptyMessage}</p>
-                </div>
-              `;
-            }
-          }
         };
+      }
+  
+      initializeCartContent() {
+        // If we're on the cart page, copy the existing cart content
+        const mainTemplate = document.querySelector('.template_for_cart_products_list');
+        if (mainTemplate) {
+          const slidingTemplate = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
+          if (slidingTemplate) {
+            slidingTemplate.innerHTML = mainTemplate.innerHTML;
+          }
+        }
+        
+        // Trigger a cart refresh to get current content
+        if (window.zid && window.zid.store && window.zid.store.cart) {
+          // Adding a slight delay to ensure everything is initialized
+          setTimeout(() => {
+            window.zid.store.cart.addProduct({
+              formId: 'temp-form',
+              data: {
+                refresh_only: true
+              }
+            });
+          }, 500);
+        }
       }
   
       openCart() {
@@ -263,21 +278,37 @@
         const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
         
         if (cart && overlay) {
-          // Show cart and overlay
           cart.style[direction] = '0';
           overlay.style.display = 'block';
+          this.isOpen = true;
           
-          // Get current cart HTML from main cart if it exists
-          const mainCartTemplate = document.querySelector('.template_for_cart_products_list');
-          const slidingCartTemplate = cart.querySelector('.template_for_cart_products_list');
-          
-          if (mainCartTemplate && slidingCartTemplate) {
-            slidingCartTemplate.innerHTML = mainCartTemplate.innerHTML;
+          // Force a cart refresh when opening
+          if (window.zid && window.zid.store && window.zid.store.cart) {
+            window.zid.store.cart.addProduct({
+              formId: 'temp-form',
+              data: {
+                refresh_only: true
+              }
+            });
           }
+        }
+      }
+  
+      closeCart() {
+        const cart = document.getElementById('hmstudio-sliding-cart');
+        const overlay = document.getElementById('hmstudio-sliding-cart-overlay');
+        const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
+        
+        if (cart && overlay) {
+          cart.style[direction] = '-400px';
+          overlay.style.display = 'none';
+          this.isOpen = false;
         }
       }
     }
   
-    // Initialize sliding cart
-    const slidingCart = new SlidingCart();
+    // Wait for Zid to be ready
+    setTimeout(() => {
+      new SlidingCart();
+    }, 1000);
   })();
