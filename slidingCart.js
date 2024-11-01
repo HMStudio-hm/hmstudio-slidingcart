@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.1.1
+// src/scripts/slidingCart.js v1.1.2
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -7,103 +7,26 @@
   
     class SlidingCart {
       constructor() {
-        this.isOpen = false;
         this.currentLanguage = document.documentElement.lang || 'ar';
-        this.cart_products = window.cart_products || [];
+        this.isOpen = false;
+        this.isInitialized = false;
         this.initialize();
       }
   
       initialize() {
-        this.addStyles();
-        this.createCartStructure();
-        this.setupCartIconListener();
+        console.log('Initializing sliding cart...');
+        this.injectCartPanel();
         this.setupCartUpdateListener();
+        this.bindCartIconClick();
         this.initializeCartContent();
       }
   
-      addStyles() {
-        const styles = `
-          .hmstudio-sliding-cart {
-            font-family: inherit;
-          }
-          .cart__items-container {
-            padding: 15px;
-          }
-          .cart-product-row {
-            display: flex;
-            align-items: center;
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-          }
-          .cart-product-image {
-            width: 80px;
-            margin-right: 15px;
-          }
-          .cart-product-image img {
-            width: 100%;
-            height: auto;
-            border-radius: 4px;
-          }
-          .cart-product-details {
-            flex: 1;
-          }
-          .cart-product-name {
-            font-weight: bold;
-            color: #333;
-            text-decoration: none;
-            margin-bottom: 5px;
-            display: block;
-          }
-          .cart-product-price {
-            color: #666;
-            margin-bottom: 10px;
-          }
-          .cart-product-quantity-dropdown select {
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-right: 10px;
-          }
-          .cart-product-delete a {
-            color: #ff4444;
-            text-decoration: none;
-          }
-          .cart__empty {
-            text-align: center;
-            padding: 30px 0;
-            display: none;
-          }
-          .hmstudio-cart-footer {
-            background: #f9f9f9;
-            padding: 15px;
-            margin-top: auto;
-          }
-          .cart__total-list {
-            margin-bottom: 15px;
-          }
-          .cart__total-item, .cart__total-item--total {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-          }
-          .cart__total-item--total {
-            font-weight: bold;
-            border-top: 1px solid #ddd;
-            margin-top: 5px;
-            padding-top: 10px;
-          }
-        `;
-  
-        const styleSheet = document.createElement('style');
-        styleSheet.textContent = styles;
-        document.head.appendChild(styleSheet);
-      }
-  
-      createCartStructure() {
+      injectCartPanel() {
+        console.log('Injecting cart panel...');
         const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
         
-        const cartHTML = `
-          <div id="hmstudio-sliding-cart" class="cart cart_page" style="
+        const cartPanel = `
+          <div id="hmstudio-sliding-cart" class="sliding-cart-panel" style="
             position: fixed;
             top: 0;
             ${direction}: -400px;
@@ -112,12 +35,11 @@
             background: white;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             transition: ${direction} 0.3s ease;
-            z-index: 9999;
+            z-index: 999999;
             display: flex;
             flex-direction: column;
-            direction: ${this.currentLanguage === 'ar' ? 'rtl' : 'ltr'};
           ">
-            <div style="
+            <div class="sliding-cart-header" style="
               padding: 20px;
               border-bottom: 1px solid #eee;
               display: flex;
@@ -133,40 +55,69 @@
                 padding: 5px;
               ">×</button>
             </div>
-            
-            <div style="flex-grow: 1; overflow-y: auto;">
-              <div class="cart__empty mt-5" style="display: none;">
-                <div class="cart__empty-icon">
-                  <img loading="lazy" src="/assets/images/shopping-bag-empty.gif" alt="empty_cart" width="150" height="150">
-                </div>
-                <h1 class="cart__empty-text my-5">
-                  ${this.currentLanguage === 'ar' ? 'السلة فارغة' : 'Your cart is empty'}
-                </h1>
-                <a href="/" class="no-btn-style common-btn cart__empty-btn mt-5">
-                  ${this.currentLanguage === 'ar' ? 'تسوق الآن' : 'Shop Now'}
-                </a>
+  
+            <div class="sliding-cart-content" style="
+              flex-grow: 1;
+              overflow-y: auto;
+              padding: 20px;
+            ">
+              <!-- Empty cart message -->
+              <div class="sliding-cart-empty" style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                text-align: center;
+              ">
+                <img src="/assets/images/shopping-bag-empty.gif" alt="Empty Cart" style="width: 100px; margin-bottom: 20px;">
+                <p>${this.currentLanguage === 'ar' ? 'سلة التسوق فارغة' : 'Your cart is empty'}</p>
+                <a href="/" class="continue-shopping" style="
+                  margin-top: 20px;
+                  padding: 10px 20px;
+                  background: #000;
+                  color: white;
+                  text-decoration: none;
+                  border-radius: 4px;
+                ">${this.currentLanguage === 'ar' ? 'متابعة التسوق' : 'Continue Shopping'}</a>
               </div>
   
-              <div class="cart__items-container">
-                <div class="cart__items">
-                  <div class="template_for_cart_products_list"></div>
-                </div>
+              <!-- Cart items container -->
+              <div class="sliding-cart-items">
+                <div class="template_for_cart_products_list"></div>
               </div>
             </div>
-            
-            <div class="cart__side-col">
-              <div class="cart__total-container">
-                <div class="cart__total-list"></div>
-                <a href="/checkout" class="no-btn-style common-btn cart__total-checkout mt-4">
-                  ${this.currentLanguage === 'ar' ? 'إتمام الطلب' : 'Checkout'}
-                </a>
-                <a href="/cart" class="no-btn-style cart__total-coutinue">
-                  ${this.currentLanguage === 'ar' ? 'عرض السلة' : 'View Cart'}
-                </a>
+  
+            <div class="sliding-cart-footer" style="
+              padding: 20px;
+              border-top: 1px solid #eee;
+            ">
+              <div class="cart__total-list" style="margin-bottom: 15px;"></div>
+              <div class="sliding-cart-buttons" style="
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+              ">
+                <a href="/cart/view" class="view-cart-button" style="
+                  text-align: center;
+                  padding: 10px;
+                  background: #f0f0f0;
+                  color: #333;
+                  text-decoration: none;
+                  border-radius: 4px;
+                ">${this.currentLanguage === 'ar' ? 'عرض السلة' : 'View Cart'}</a>
+                <a href="/checkout" class="checkout-button" style="
+                  text-align: center;
+                  padding: 10px;
+                  background: #000;
+                  color: white;
+                  text-decoration: none;
+                  border-radius: 4px;
+                ">${this.currentLanguage === 'ar' ? 'إتمام الطلب' : 'Checkout'}</a>
               </div>
             </div>
           </div>
-          
+  
           <div id="hmstudio-sliding-cart-overlay" style="
             position: fixed;
             top: 0;
@@ -175,99 +126,152 @@
             height: 100vh;
             background: rgba(0,0,0,0.5);
             display: none;
-            z-index: 9998;
+            z-index: 999998;
           "></div>
         `;
   
-        document.body.insertAdjacentHTML('beforeend', cartHTML);
+        // Inject the cart panel
+        document.body.insertAdjacentHTML('beforeend', cartPanel);
   
+        // Add event listeners
         const closeBtn = document.querySelector('.sliding-cart-close');
         const overlay = document.getElementById('hmstudio-sliding-cart-overlay');
         
-        closeBtn.addEventListener('click', () => this.closeCart());
-        overlay.addEventListener('click', () => this.closeCart());
-      }
-  
-      setupCartIconListener() {
-        document.addEventListener('click', (e) => {
-          const cartIcon = e.target.closest('.cart-icon, .header-cart-icon, [data-cart-icon], a-shopping-cart, .a-shopping-cart');
-          if (cartIcon) {
-            e.preventDefault();
-            e.stopPropagation();
-            this.openCart();
-          }
-        });
+        closeBtn?.addEventListener('click', () => this.closeCart());
+        overlay?.addEventListener('click', () => this.closeCart());
       }
   
       setupCartUpdateListener() {
-        // Override updateCartProducts
-        const originalUpdateCartProducts = window.updateCartProducts || function() {};
-        window.updateCartProducts = (res, shouldUpdateCartBadge = true) => {
-          originalUpdateCartProducts(res, shouldUpdateCartBadge);
-          this.refreshCartDisplay();
-        };
-  
-        // Override cartProductsHtmlChanged
+        console.log('Setting up cart update listener...');
+        
+        // Store the original function
         const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
+  
+        // Override with our enhanced version
         window.cartProductsHtmlChanged = (html, cart) => {
+          // Call original function first
           originalCartProductsHtmlChanged(html, cart);
           
+          console.log('Cart updated:', { productsCount: cart.products_count, totals: cart.totals });
+          
           // Update our sliding cart
-          const slidingTemplate = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
-          if (slidingTemplate) {
-            slidingTemplate.innerHTML = html || '';
-            
-            // Update empty cart state
-            const emptyCart = document.querySelector('#hmstudio-sliding-cart .cart__empty');
-            const itemsContainer = document.querySelector('#hmstudio-sliding-cart .cart__items-container');
-            
-            if (cart && cart.products_count <= 0) {
-              if (emptyCart) emptyCart.style.display = 'flex';
-              if (itemsContainer) itemsContainer.style.display = 'none';
-            } else {
-              if (emptyCart) emptyCart.style.display = 'none';
-              if (itemsContainer) itemsContainer.style.display = 'block';
-            }
-  
-            // Update totals
-            if (cart && cart.totals) {
-              const totalsList = document.querySelector('#hmstudio-sliding-cart .cart__total-list');
-              if (totalsList) {
-                let totalsHtml = cart.totals.map(total => `
-                  <li class="${total.code === 'total' ? 'cart__total-item--total' : 'cart__total-item'}">
-                    <p>${total.title}</p>
-                    <p>${total.value_string}</p>
-                  </li>
-                `).join('');
-                totalsList.innerHTML = totalsHtml;
-              }
-            }
-          }
+          this.updateCartContent(html, cart);
         };
       }
   
-      refreshCartDisplay() {
-        // Using Zid's cart refresh mechanism
-        if (window.zid && window.zid.store && window.zid.store.cart) {
-          window.zid.store.cart.addProduct({
-            formId: 'temp-form',
-            data: {
-              refresh_only: true
-            }
-          }).then(response => {
-            if (response && response.data && response.data.cart) {
-              // This will trigger cartProductsHtmlChanged
-              window.cart_products = response.data.cart.products || [];
-            }
-          }).catch(error => {
-            console.error('Error refreshing cart:', error);
+      bindCartIconClick() {
+        console.log('Binding cart icon click events...');
+        
+        // Find all possible cart icons
+        const cartIcons = document.querySelectorAll('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart, [data-cart-icon]');
+        
+        cartIcons.forEach(icon => {
+          icon.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.toggleCart();
           });
+        });
+      }
+  
+      async initializeCartContent() {
+        console.log('Initializing cart content...');
+        
+        try {
+          // Try to get initial cart state from Zid's global cart object
+          if (window.zid?.store?.cart?.get) {
+            const cartData = await window.zid.store.cart.get();
+            if (cartData && cartData.status === 'success') {
+              console.log('Initial cart data:', cartData);
+              this.updateCartContent(cartData.data.products_list_html, cartData.data);
+            }
+          }
+        } catch (error) {
+          console.error('Error initializing cart content:', error);
         }
       }
   
-      initializeCartContent() {
-        // Initial refresh
-        this.refreshCartDisplay();
+      updateCartContent(html, cart) {
+        console.log('Updating cart content...', { html: !!html, cart });
+        
+        const slidingCart = document.getElementById('hmstudio-sliding-cart');
+        if (!slidingCart) return;
+  
+        // Update cart items
+        const productsContainer = slidingCart.querySelector('.template_for_cart_products_list');
+        const emptyMessage = slidingCart.querySelector('.sliding-cart-empty');
+        const itemsContainer = slidingCart.querySelector('.sliding-cart-items');
+  
+        if (!cart || cart.products_count <= 0) {
+          if (emptyMessage) emptyMessage.style.display = 'flex';
+          if (itemsContainer) itemsContainer.style.display = 'none';
+        } else {
+          if (emptyMessage) emptyMessage.style.display = 'none';
+          if (itemsContainer) itemsContainer.style.display = 'block';
+          if (productsContainer && html) {
+            productsContainer.innerHTML = html;
+            
+            // Re-bind quantity change events
+            this.bindQuantityEvents(productsContainer);
+          }
+        }
+  
+        // Update totals
+        if (cart && cart.totals) {
+          const totalsContainer = slidingCart.querySelector('.cart__total-list');
+          if (totalsContainer) {
+            let totalsHTML = '';
+            cart.totals.forEach(total => {
+              totalsHTML += `
+                <div class="${total.code === 'total' ? 'cart__total-item--total' : 'cart__total-item'}" style="
+                  display: flex;
+                  justify-content: space-between;
+                  margin-bottom: 10px;
+                  ${total.code === 'total' ? 'font-weight: bold;' : ''}
+                ">
+                  <span>${total.title}</span>
+                  <span>${total.value_string}</span>
+                </div>
+              `;
+            });
+            totalsContainer.innerHTML = totalsHTML;
+          }
+        }
+      }
+  
+      bindQuantityEvents(container) {
+        // Bind quantity change events
+        const quantitySelects = container.querySelectorAll('.cart-product-quantity-dropdown select');
+        quantitySelects.forEach(select => {
+          select.addEventListener('change', async (e) => {
+            const row = e.target.closest('.cart-product-row');
+            if (row) {
+              const deleteIcon = row.querySelector('.icon-delete');
+              const prefix = row.querySelector('.prefix');
+              if (deleteIcon) deleteIcon.style.display = 'none';
+              if (prefix) prefix.style.display = 'block';
+            }
+          });
+        });
+  
+        // Bind delete button events
+        const deleteButtons = container.querySelectorAll('.cart-product-delete a');
+        deleteButtons.forEach(button => {
+          button.addEventListener('click', (e) => {
+            const deleteIcon = button.querySelector('.icon-delete');
+            const prefix = button.querySelector('.prefix');
+            if (deleteIcon) deleteIcon.style.display = 'none';
+            if (prefix) prefix.style.display = 'block';
+          });
+        });
+      }
+  
+      toggleCart() {
+        if (this.isOpen) {
+          this.closeCart();
+        } else {
+          this.openCart();
+        }
       }
   
       openCart() {
@@ -279,7 +283,9 @@
           cart.style[direction] = '0';
           overlay.style.display = 'block';
           this.isOpen = true;
-          this.refreshCartDisplay();
+  
+          // Refresh cart content when opening
+          this.initializeCartContent();
         }
       }
   
@@ -296,10 +302,9 @@
       }
     }
   
-    // Make sure Zid is ready before initializing
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => new SlidingCart());
-    } else {
-      new SlidingCart();
-    }
+    // Initialize the sliding cart
+    const slidingCart = new SlidingCart();
+  
+    // Make it globally accessible if needed
+    window.HMStudioSlidingCart = slidingCart;
   })();
