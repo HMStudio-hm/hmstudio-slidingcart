@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.0.4
+// src/scripts/slidingCart.js v1.0.5
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -31,7 +31,6 @@
       }
   
       initialize() {
-        // Add styles to head
         this.addStyles();
         this.createCartStructure();
         this.setupCartIconListener();
@@ -102,23 +101,31 @@
           }
           .hmstudio-checkout-button {
             background: #000;
-            color: #fff;
+            color: #fff !important;
             padding: 12px;
             text-align: center;
             border-radius: 4px;
             text-decoration: none;
             display: block;
             margin-top: 15px;
+            transition: opacity 0.3s ease;
+          }
+          .hmstudio-checkout-button:hover {
+            opacity: 0.9;
           }
           .hmstudio-view-cart-button {
             background: #f0f0f0;
-            color: #333;
+            color: #333 !important;
             padding: 12px;
             text-align: center;
             border-radius: 4px;
             text-decoration: none;
             display: block;
             margin-top: 10px;
+            transition: background-color 0.3s ease;
+          }
+          .hmstudio-view-cart-button:hover {
+            background: #e5e5e5;
           }
           .hmstudio-cart-buttons {
             margin-top: 15px;
@@ -172,7 +179,6 @@
               padding: 20px;
             ">
               <div id="hmstudio-cart-empty" class="hmstudio-cart-empty" style="display: none;">
-                <img src="/assets/images/shopping-bag-empty.gif" alt="Empty Cart" style="width: 150px; margin-bottom: 20px;">
                 <p style="margin: 10px 0;">
                   ${this.currentLanguage === 'ar' ? 'السلة فارغة' : 'Your cart is empty'}
                 </p>
@@ -235,11 +241,21 @@
       async fetchCartData() {
         try {
           if (window.zid && window.zid.store && window.zid.store.cart) {
-            const response = await window.zid.store.cart.get();
-            if (response && response.status === 'success') {
-              this.cartData = response.data;
+            const cartResponse = await window.zid.store.cart.addProduct({ 
+              formId: 'temp-form',
+              data: {
+                refresh_only: true
+              }
+            });
+  
+            if (cartResponse && cartResponse.status === 'success') {
+              this.cartData = cartResponse.data.cart;
               this.updateCartDisplay();
+            } else {
+              console.error('Failed to fetch cart data:', cartResponse);
             }
+          } else {
+            console.error('Zid cart API not available');
           }
         } catch (error) {
           console.error('Error fetching cart data:', error);
@@ -247,16 +263,15 @@
       }
   
       setupCartUpdateListener() {
-        if (window.zid && window.zid.store && window.zid.store.cart) {
-          const originalCartUpdate = window.zid.store.cart.update;
-          window.zid.store.cart.update = async (...args) => {
-            const result = await originalCartUpdate.apply(window.zid.store.cart, args);
-            if (result.status === 'success') {
-              await this.fetchCartData();
-            }
-            return result;
-          };
-        }
+        // Listen for cart HTML changes from Zid
+        const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
+        window.cartProductsHtmlChanged = (html, cart) => {
+          originalCartProductsHtmlChanged(html, cart);
+          if (cart) {
+            this.cartData = cart;
+            this.updateCartDisplay();
+          }
+        };
   
         // Setup product quantity change handler
         document.addEventListener('change', async (e) => {
@@ -265,9 +280,12 @@
             const quantity = parseInt(e.target.value);
             
             try {
-              await window.zid.store.cart.updateProduct({
-                product_id: productId,
-                quantity: quantity
+              await window.zid.store.cart.addProduct({ 
+                formId: 'temp-form',
+                data: {
+                  product_id: productId,
+                  quantity: quantity
+                }
               });
               await this.fetchCartData();
             } catch (error) {
@@ -283,7 +301,11 @@
             const productId = e.target.dataset.productId;
             
             try {
-              await window.zid.store.cart.removeProduct(productId);
+              await window.zid.store.cart.removeProduct({ 
+                data: {
+                  product_id: productId
+                }
+              });
               await this.fetchCartData();
             } catch (error) {
               console.error('Error removing product:', error);
@@ -297,7 +319,12 @@
         const cartItemsEl = document.getElementById('hmstudio-cart-items');
         const cartTotalsEl = document.getElementById('hmstudio-cart-totals');
   
-        if (!this.cartData || this.cartData.products_count === 0) {
+        if (!emptyCartEl || !cartItemsEl || !cartTotalsEl) {
+          console.error('Required cart elements not found');
+          return;
+        }
+  
+        if (!this.cartData || !this.cartData.products || this.cartData.products.length === 0) {
           emptyCartEl.style.display = 'block';
           cartItemsEl.style.display = 'none';
           cartTotalsEl.innerHTML = '';
@@ -339,21 +366,23 @@
         cartItemsEl.innerHTML = itemsHTML;
   
         // Update totals
-        let totalsHTML = '';
-        this.cartData.totals.forEach(total => {
-          const isTotal = total.code === 'total';
-          totalsHTML += `
-            <div class="hmstudio-total-row" style="${isTotal ? 'font-weight: bold;' : ''}">
-              <span>${total.title}</span>
-              <span>${total.value_string}</span>
-            </div>
-          `;
-        });
-        cartTotalsEl.innerHTML = totalsHTML;
+        if (this.cartData.totals) {
+          let totalsHTML = '';
+          this.cartData.totals.forEach(total => {
+            const isTotal = total.code === 'total';
+            totalsHTML += `
+              <div class="hmstudio-total-row" style="${isTotal ? 'font-weight: bold;' : ''}">
+                <span>${total.title}</span>
+                <span>${total.value_string}</span>
+              </div>
+            `;
+          });
+          cartTotalsEl.innerHTML = totalsHTML;
+        }
   
         // Update cart badge if function exists
         if (typeof setCartBadge === 'function') {
-          setCartBadge(this.cartData.products_count);
+          setCartBadge(this.cartData.products.length);
         }
       }
   
