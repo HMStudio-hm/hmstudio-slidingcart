@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.1.8
+// src/scripts/slidingCart.js v1.1.9
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -9,351 +9,21 @@
       constructor() {
         this.currentLanguage = document.documentElement.lang || 'ar';
         this.isOpen = false;
-        this.cartState = {
-          products: [],
-          totals: [],
-          isEmpty: true
-        };
-        this.initializeSlidingCart();
+        this.initialize();
       }
   
-      async parseOriginalCartContent() {
-        console.log('Attempting to parse cart content...');
-        
-        // Try to get cart content from current page
-        const mainCartContent = document.querySelector('.template_for_cart_products_list');
-        
-        if (mainCartContent) {
-          console.log('Found cart content in current page');
-          this.parseCartContent({
-            productsTemplate: mainCartContent,
-            totalsList: document.querySelector('.cart__total-list')
-          });
-        } else {
-          console.log('No cart content found in current page, fetching from cart page...');
-          await this.fetchCartPage();
-        }
-      }
-
-      // ============ Cart State Management ============
-      initializeSlidingCart() {
+      initialize() {
         console.log('Initializing sliding cart...');
         this.injectCartPanel();
-        this.setupStateSync();
-        this.bindEventListeners();
-        this.parseOriginalCartContent();
+        this.bindCartIconClick();
       }
   
-      parseOriginalCartContent() {
-        // First try to get cart content from existing elements
-        const cartTemplateContent = document.querySelector('.template_for_cart_products_list');
-        const cartTotalsList = document.querySelector('.cart__total-list');
-      
-        if (!cartTemplateContent) {
-          console.log('No cart template found, fetching from cart page...');
-          this.fetchCartPage();
-          return;
-        }
-      
-        const cartContent = {
-          productsTemplate: cartTemplateContent,
-          totalsList: cartTotalsList
-        };
-      
-        this.parseCartContent(cartContent);
-      }
-      
-      async fetchCartPage() {
-    try {
-      const response = await fetch('/cart/view');
-      const text = await response.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(text, 'text/html');
-      
-      const cartContent = {
-        productsTemplate: doc.querySelector('.template_for_cart_products_list'),
-        totalsList: doc.querySelector('.cart__total-list')
-      };
-
-      if (cartContent.productsTemplate) {
-        console.log('Successfully fetched cart content');
-        this.parseCartContent(cartContent);
-      } else {
-        console.log('No cart template found in fetched page');
-        // If we can't find the template, try to get cart data from Zid's cart badge
-        this.checkCartBadge();
-      }
-    } catch (error) {
-      console.error('Error fetching cart page:', error);
-      this.checkCartBadge();
-    }
-  }
-      
-  checkCartBadge() {
-    // Check if there are items in cart based on Zid's cart badge
-    const cartBadge = document.querySelector('.cart-icon .badge, .header-cart-icon .badge, a-shopping-cart, .a-shopping-cart');
-    const itemCount = cartBadge ? parseInt(cartBadge.textContent) : 0;
-    console.log('Cart badge count:', itemCount);
-    
-    if (itemCount > 0) {
-      // If we have items but can't get the template, show a temporary message
-      const slidingCartProducts = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
-      if (slidingCartProducts) {
-        slidingCartProducts.innerHTML = `<div class="cart-loading" style="text-align: center; padding: 20px;">
-          ${this.currentLanguage === 'ar' ? 'جاري تحميل محتويات السلة...' : 'Loading cart contents...'}
-        </div>`;
-      }
-      // Try to fetch cart page again after a short delay
-      setTimeout(() => this.fetchCartPage(), 1000);
-    } else {
-      this.updateEmptyState(false);
-    }
-  }
-
-      parseCartContent(content) {
-        // Parse products
-        if (content.productsTemplate) {
-          const slidingCartProducts = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
-          if (slidingCartProducts) {
-            slidingCartProducts.innerHTML = content.productsTemplate.innerHTML;
-          }
-        }
-      
-        // Parse totals
-        if (content.totalsList) {
-          const slidingCartTotals = document.querySelector('#hmstudio-sliding-cart .cart__total-list');
-          if (slidingCartTotals) {
-            slidingCartTotals.innerHTML = content.totalsList.innerHTML;
-          }
-        }
-      
-        // Update empty state
-        const hasProducts = Boolean(content.productsTemplate?.children.length);
-        this.updateEmptyState(hasProducts);
-        
-        // Bind events to the newly added content
-        this.bindProductEvents();
-      }
-  
-      setupStateSync() {
-        // Store original cart functions
-        const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
-        const originalSetCartBadge = window.setCartBadge || function() {};
-    
-        // Override cart update function
-        window.cartProductsHtmlChanged = (html, cart) => {
-          console.log('Cart updated:', { productsCount: cart?.products_count });
-          
-          // Call original function
-          originalCartProductsHtmlChanged(html, cart);
-          
-          // Update sliding cart
-          this.updateSlidingCartContent(html, cart);
-    
-          // If we're not on the cart page, also update the main cart template
-          const mainCartTemplate = document.querySelector('.template_for_cart_products_list');
-          if (mainCartTemplate) {
-            mainCartTemplate.innerHTML = html;
-          }
-        };
-    
-        // Override cart badge function
-        window.setCartBadge = (count) => {
-          originalSetCartBadge(count);
-          console.log('Cart badge updated:', count);
-          
-          // If count is greater than 0 and we don't have cart content, fetch it
-          if (count > 0) {
-            const slidingCartProducts = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
-            if (!slidingCartProducts?.children.length) {
-              this.fetchCartPage();
-            }
-          } else {
-            this.updateEmptyState(false);
-          }
-        };
-    
-        // Listen for add to cart events
-        document.addEventListener('click', (e) => {
-          if (e.target.matches('.product-card-add-to-cart, .btn-add-to-cart, .quick-view-modal .add-to-cart-btn')) {
-            console.log('Add to cart clicked');
-            // Wait for Zid to process the add to cart
-            setTimeout(() => this.fetchCartPage(), 1000);
-          }
-        });
-    
-        // Listen for form submissions
-        document.addEventListener('submit', (e) => {
-          if (e.target.matches('form[action*="/cart/add"]')) {
-            console.log('Cart form submitted');
-            // Wait for Zid to process the add to cart
-            setTimeout(() => this.fetchCartPage(), 1000);
-          }
-        });
-      }
-  
-      updateSlidingCartContent(html, cart) {
-        console.log('Updating sliding cart content');
-        const slidingCart = document.getElementById('hmstudio-sliding-cart');
-        if (!slidingCart) return;
-    
-        // Update products list
-        const productsContainer = slidingCart.querySelector('.template_for_cart_products_list');
-        if (productsContainer && html) {
-          productsContainer.innerHTML = html;
-          this.bindProductEvents();
-        }
-    
-        // Update totals if available
-        if (cart?.totals) {
-          const totalsContainer = slidingCart.querySelector('.cart__total-list');
-          if (totalsContainer) {
-            let totalsHTML = cart.totals.map(total => `
-              <div class="${total.code === 'total' ? 'cart__total-item--total' : 'cart__total-item'}" style="
-                display: flex;
-                justify-content: space-between;
-                margin-bottom: 10px;
-                ${total.code === 'total' ? 'font-weight: bold;' : ''}
-              ">
-                <span>${total.title}</span>
-                <span>${total.value_string}</span>
-              </div>
-            `).join('');
-            totalsContainer.innerHTML = totalsHTML;
-          }
-        }
-    
-        // Update empty state
-        this.updateEmptyState(cart?.products_count > 0);
-      }
-    
-  
-      // ============ Interaction Handlers ============
-      handleQuantityChange(select) {
-        const row = select.closest('.cart-product-row');
-        if (!row) return;
-  
-        // Show loading state
-        const deleteIcon = row.querySelector('.icon-delete');
-        const prefix = row.querySelector('.prefix');
-        if (deleteIcon) deleteIcon.style.display = 'none';
-        if (prefix) prefix.style.display = 'block';
-      }
-  
-      handleProductRemoval(button) {
-        const row = button.closest('.cart-product-row');
-        if (!row) return;
-  
-        // Show loading state
-        const deleteIcon = button.querySelector('.icon-delete');
-        const prefix = button.querySelector('.prefix');
-        if (deleteIcon) deleteIcon.style.display = 'none';
-        if (prefix) prefix.style.display = 'block';
-      }
-  
-      // ============ Animation Management ============
-      slideIn() {
-        const cart = document.getElementById('hmstudio-sliding-cart');
-        const overlay = document.getElementById('hmstudio-sliding-cart-overlay');
-        const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
-        
-        if (cart && overlay) {
-          cart.style[direction] = '0';
-          overlay.style.display = 'block';
-          this.isOpen = true;
-          // Refresh content
-          this.parseOriginalCartContent();
-        }
-      }
-  
-      slideOut() {
-        const cart = document.getElementById('hmstudio-sliding-cart');
-        const overlay = document.getElementById('hmstudio-sliding-cart-overlay');
-        const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
-        
-        if (cart && overlay) {
-          cart.style[direction] = '-400px';
-          overlay.style.display = 'none';
-          this.isOpen = false;
-        }
-      }
-  
-      toggleSlidingCart() {
-        if (this.isOpen) {
-          this.slideOut();
-        } else {
-          this.slideIn();
-        }
-      }
-  
-      // ============ UI Updates ============
-      updateEmptyState(hasProducts) {
-        const slidingCart = document.getElementById('hmstudio-sliding-cart');
-        if (!slidingCart) return;
-      
-        const emptyMessage = slidingCart.querySelector('.sliding-cart-empty');
-        const itemsContainer = slidingCart.querySelector('.sliding-cart-items');
-        
-        // Also check if there are actual products in the template
-        const productsContainer = slidingCart.querySelector('.template_for_cart_products_list');
-        const hasActualProducts = productsContainer && productsContainer.children.length > 0;
-      
-        if (hasProducts && hasActualProducts) {
-          if (emptyMessage) emptyMessage.style.display = 'none';
-          if (itemsContainer) itemsContainer.style.display = 'block';
-        } else {
-          if (emptyMessage) emptyMessage.style.display = 'flex';
-          if (itemsContainer) itemsContainer.style.display = 'none';
-        }
-      }
-  
-      // ============ Event Binding ============
-      bindEventListeners() {
-        // Cart icon click
-        document.querySelectorAll('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart, a-shopping-cart, .a-shopping-cart, [data-cart-icon]').forEach(icon => {
-          icon.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.toggleSlidingCart();
-          });
-        });
-  
-        // Close button and overlay
-        const closeBtn = document.querySelector('.sliding-cart-close');
-        const overlay = document.getElementById('hmstudio-sliding-cart-overlay');
-        
-        closeBtn?.addEventListener('click', () => this.slideOut());
-        overlay?.addEventListener('click', () => this.slideOut());
-  
-        // Listen for product additions
-        document.addEventListener('click', (e) => {
-          if (e.target.matches('.product-card-add-to-cart, .btn-add-to-cart, .quick-view-modal .add-to-cart-btn')) {
-            setTimeout(() => this.parseOriginalCartContent(), 1000);
-          }
-        });
-      }
-  
-      bindProductEvents() {
-        const slidingCart = document.getElementById('hmstudio-sliding-cart');
-        if (!slidingCart) return;
-  
-        // Quantity change events
-        slidingCart.querySelectorAll('.cart-product-quantity-dropdown select').forEach(select => {
-          select.addEventListener('change', () => this.handleQuantityChange(select));
-        });
-  
-        // Delete button events
-        slidingCart.querySelectorAll('.cart-product-delete a').forEach(button => {
-          button.addEventListener('click', () => this.handleProductRemoval(button));
-        });
-      }
-  
-      // ============ Cart Panel Injection ============
       injectCartPanel() {
         const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
         
+        // Create the sliding cart container
         const cartPanel = `
-          <div id="hmstudio-sliding-cart" class="sliding-cart-panel" style="
+          <div id="hmstudio-sliding-cart" style="
             position: fixed;
             top: 0;
             ${direction}: -400px;
@@ -366,81 +36,33 @@
             display: flex;
             flex-direction: column;
           ">
-            <div class="sliding-cart-header" style="
-              padding: 20px;
-              border-bottom: 1px solid #eee;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            ">
-              <h3 style="margin: 0;">${this.currentLanguage === 'ar' ? 'سلة التسوق' : 'Shopping Cart'}</h3>
-              <button class="sliding-cart-close" style="
-                border: none;
-                background: none;
-                font-size: 24px;
-                cursor: pointer;
-                padding: 5px;
-              ">×</button>
-            </div>
+            <!-- Use Zid's exact cart structure -->
+            <div class="cart cart_page">
+              <div class="cart__items-container">
+                <div class="cart__empty" style="{% if cart.products_count <= 0 %}display: flex;{% endif %}">
+                  <div class="cart__empty-icon">
+                    <img loading="lazy" src="{{ asset_url ~ 'shopping-bag-empty.gif' }}" alt="empty_cart" width="150" height="150">
+                  </div>
+                  <h1 class="cart__empty-text my-5">${this.currentLanguage === 'ar' ? 'السلة فارغة' : 'Cart is empty'}</h1>
+                  <a href="/" class="no-btn-style common-btn cart__empty-btn mt-5">
+                    ${this.currentLanguage === 'ar' ? 'متابعة التسوق' : 'Continue Shopping'}
+                  </a>
+                </div>
   
-            <div class="sliding-cart-content" style="
-              flex-grow: 1;
-              overflow-y: auto;
-              padding: 20px;
-            ">
-              <!-- Empty cart message -->
-              <div class="sliding-cart-empty" style="
-                display: none;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-                text-align: center;
-              ">
-                <img src="/assets/images/shopping-bag-empty.gif" alt="Empty Cart" style="width: 100px; margin-bottom: 20px;">
-                <p>${this.currentLanguage === 'ar' ? 'سلة التسوق فارغة' : 'Your cart is empty'}</p>
-                <a href="/" class="continue-shopping" style="
-                  margin-top: 20px;
-                  padding: 10px 20px;
-                  background: #000;
-                  color: white;
-                  text-decoration: none;
-                  border-radius: 4px;
-                ">${this.currentLanguage === 'ar' ? 'متابعة التسوق' : 'Continue Shopping'}</a>
+                <div class="cart__items">
+                  <div class="template_for_cart_products_list">
+                    <!-- Cart items will be injected here by Zid -->
+                  </div>
+                </div>
               </div>
   
-              <!-- Cart items container -->
-              <div class="sliding-cart-items">
-                <div class="template_for_cart_products_list"></div>
-              </div>
-            </div>
-  
-            <div class="sliding-cart-footer" style="
-              padding: 20px;
-              border-top: 1px solid #eee;
-            ">
-              <div class="cart__total-list" style="margin-bottom: 15px;"></div>
-              <div class="sliding-cart-buttons" style="
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-              ">
-                <a href="/cart/view" class="view-cart-button" style="
-                  text-align: center;
-                  padding: 10px;
-                  background: #f0f0f0;
-                  color: #333;
-                  text-decoration: none;
-                  border-radius: 4px;
-                ">${this.currentLanguage === 'ar' ? 'عرض السلة' : 'View Cart'}</a>
-                <a href="/checkout" class="checkout-button" style="
-                  text-align: center;
-                  padding: 10px;
-                  background: #000;
-                  color: white;
-                  text-decoration: none;
-                  border-radius: 4px;
-                ">${this.currentLanguage === 'ar' ? 'إتمام الطلب' : 'Checkout'}</a>
+              <div class="cart__side-col">
+                <div class="cart__total-container">
+                  <h3 class="cart__total-title">${this.currentLanguage === 'ar' ? 'ملخص الطلب' : 'Order Summary'}</h3>
+                  <ul class="cart__total-list">
+                    <!-- Totals will be injected here by Zid -->
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
@@ -457,7 +79,96 @@
           "></div>
         `;
   
+        // Inject the cart panel
         document.body.insertAdjacentHTML('beforeend', cartPanel);
+  
+        // Add event listeners
+        document.querySelector('.sliding-cart-close')?.addEventListener('click', () => this.closeCart());
+        document.getElementById('hmstudio-sliding-cart-overlay')?.addEventListener('click', () => this.closeCart());
+  
+        // Set up cart update listener
+        this.setupCartUpdateListener();
+      }
+  
+      setupCartUpdateListener() {
+        // Store original function
+        const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
+  
+        // Override with our version that updates both carts
+        window.cartProductsHtmlChanged = (html, cart) => {
+          // Call original function
+          originalCartProductsHtmlChanged(html, cart);
+  
+          // Update sliding cart
+          const slidingCartTemplate = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
+          const slidingCartTotals = document.querySelector('#hmstudio-sliding-cart .cart__total-list');
+          const slidingCartEmpty = document.querySelector('#hmstudio-sliding-cart .cart__empty');
+          const slidingCartItems = document.querySelector('#hmstudio-sliding-cart .cart__items');
+  
+          if (cart.products_count <= 0) {
+            if (slidingCartEmpty) slidingCartEmpty.style.display = 'flex';
+            if (slidingCartItems) slidingCartItems.style.display = 'none';
+          } else {
+            if (slidingCartEmpty) slidingCartEmpty.style.display = 'none';
+            if (slidingCartItems) slidingCartItems.style.display = 'block';
+            if (slidingCartTemplate) slidingCartTemplate.innerHTML = html;
+          }
+  
+          // Update totals
+          if (slidingCartTotals && cart.totals) {
+            slidingCartTotals.innerHTML = cart.totals.map(total => `
+              <li class="${total.code === 'total' ? 'cart__total-item--total' : 'cart__total-item'}">
+                <p>${total.title}</p>
+                <p>${total.value_string}</p>
+              </li>
+            `).join('');
+          }
+        };
+      }
+  
+      bindCartIconClick() {
+        // Find all possible cart icons
+        const cartIcons = document.querySelectorAll('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart, [data-cart-icon]');
+        
+        cartIcons.forEach(icon => {
+          icon.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.toggleCart();
+          });
+        });
+      }
+  
+      openCart() {
+        const cart = document.getElementById('hmstudio-sliding-cart');
+        const overlay = document.getElementById('hmstudio-sliding-cart-overlay');
+        const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
+        
+        if (cart && overlay) {
+          cart.style[direction] = '0';
+          overlay.style.display = 'block';
+          this.isOpen = true;
+        }
+      }
+  
+      closeCart() {
+        const cart = document.getElementById('hmstudio-sliding-cart');
+        const overlay = document.getElementById('hmstudio-sliding-cart-overlay');
+        const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
+        
+        if (cart && overlay) {
+          cart.style[direction] = '-400px';
+          overlay.style.display = 'none';
+          this.isOpen = false;
+        }
+      }
+  
+      toggleCart() {
+        if (this.isOpen) {
+          this.closeCart();
+        } else {
+          this.openCart();
+        }
       }
     }
   
