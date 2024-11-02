@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.1.9
+// src/scripts/slidingCart.js v1.2.0
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -16,12 +16,12 @@
         console.log('Initializing sliding cart...');
         this.injectCartPanel();
         this.bindCartIconClick();
+        this.setupCartUpdateListener();
       }
   
       injectCartPanel() {
         const direction = this.currentLanguage === 'ar' ? 'right' : 'left';
         
-        // Create the sliding cart container
         const cartPanel = `
           <div id="hmstudio-sliding-cart" style="
             position: fixed;
@@ -36,35 +36,55 @@
             display: flex;
             flex-direction: column;
           ">
-            <!-- Use Zid's exact cart structure -->
-            <div class="cart cart_page">
-              <div class="cart__items-container">
-                <div class="cart__empty" style="{% if cart.products_count <= 0 %}display: flex;{% endif %}">
-                  <div class="cart__empty-icon">
-                    <img loading="lazy" src="{{ asset_url ~ 'shopping-bag-empty.gif' }}" alt="empty_cart" width="150" height="150">
+            <div class="cart-view">
+              <div class="row cart-products-with-totals">
+                <div class="col-12 col-lg-8">
+                  <div class="section-cart-products">
+                    <h2 class="section-title">المنتجات</h2>
+                    <div class="header-wrapper">
+                      <div class="section-cart-products-row d-flex">
+                        <!-- Header content will be populated by Zid -->
+                      </div>
+                    </div>
+                    <div class="template_for_cart_products_list">
+                      <div class="cart-product-row-wrapper">
+                        <!-- Cart products will be populated by Zid -->
+                      </div>
+                    </div>
                   </div>
-                  <h1 class="cart__empty-text my-5">${this.currentLanguage === 'ar' ? 'السلة فارغة' : 'Cart is empty'}</h1>
-                  <a href="/" class="no-btn-style common-btn cart__empty-btn mt-5">
-                    ${this.currentLanguage === 'ar' ? 'متابعة التسوق' : 'Continue Shopping'}
-                  </a>
                 </div>
-  
-                <div class="cart__items">
-                  <div class="template_for_cart_products_list">
-                    <!-- Cart items will be injected here by Zid -->
+                
+                <div class="col-12 col-lg-4">
+                  <h2 class="section-title">تفاصيل الفاتورة</h2>
+                  <div class="header-wrapper"></div>
+                  <div class="cart-totals-div">
+                    <!-- Totals will be populated by Zid -->
+                  </div>
+                  <div class="coupon-form mt-5">
+                    <!-- Coupon form will be populated by Zid -->
+                  </div>
+                  <div class="cart-discount-rule-wrapper free-shipping-rule-section mt-5 d-none">
+                    <!-- Shipping rules will be populated by Zid -->
                   </div>
                 </div>
               </div>
   
-              <div class="cart__side-col">
-                <div class="cart__total-container">
-                  <h3 class="cart__total-title">${this.currentLanguage === 'ar' ? 'ملخص الطلب' : 'Order Summary'}</h3>
-                  <ul class="cart__total-list">
-                    <!-- Totals will be injected here by Zid -->
-                  </ul>
-                </div>
+              <div class="cart-empty pt-5 pbb-5 d-none">
+                <!-- Empty cart message will be populated by Zid -->
               </div>
             </div>
+  
+            <button class="sliding-cart-close" style="
+              position: absolute;
+              top: 10px;
+              ${this.currentLanguage === 'ar' ? 'left' : 'right'}: 10px;
+              border: none;
+              background: none;
+              font-size: 24px;
+              cursor: pointer;
+              padding: 5px;
+              z-index: 999999;
+            ">×</button>
           </div>
   
           <div id="hmstudio-sliding-cart-overlay" style="
@@ -83,51 +103,66 @@
         document.body.insertAdjacentHTML('beforeend', cartPanel);
   
         // Add event listeners
-        document.querySelector('.sliding-cart-close')?.addEventListener('click', () => this.closeCart());
-        document.getElementById('hmstudio-sliding-cart-overlay')?.addEventListener('click', () => this.closeCart());
-  
-        // Set up cart update listener
-        this.setupCartUpdateListener();
+        const closeBtn = document.querySelector('.sliding-cart-close');
+        const overlay = document.getElementById('hmstudio-sliding-cart-overlay');
+        
+        closeBtn?.addEventListener('click', () => this.closeCart());
+        overlay?.addEventListener('click', () => this.closeCart());
       }
   
       setupCartUpdateListener() {
         // Store original function
         const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
   
-        // Override with our version that updates both carts
+        // Override with our version
         window.cartProductsHtmlChanged = (html, cart) => {
+          console.log('Cart updated:', { html, cart });
+          
           // Call original function
           originalCartProductsHtmlChanged(html, cart);
   
-          // Update sliding cart
+          // Update our sliding cart
           const slidingCartTemplate = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
-          const slidingCartTotals = document.querySelector('#hmstudio-sliding-cart .cart__total-list');
-          const slidingCartEmpty = document.querySelector('#hmstudio-sliding-cart .cart__empty');
-          const slidingCartItems = document.querySelector('#hmstudio-sliding-cart .cart__items');
+          const slidingCartEmpty = document.querySelector('#hmstudio-sliding-cart .cart-empty');
+          const slidingCartProducts = document.querySelector('#hmstudio-sliding-cart .cart-products-with-totals');
+          const slidingCartTotals = document.querySelector('#hmstudio-sliding-cart .cart-totals-div');
   
+          if (slidingCartTemplate && html) {
+            slidingCartTemplate.innerHTML = html;
+          }
+  
+          // Update empty state
           if (cart.products_count <= 0) {
-            if (slidingCartEmpty) slidingCartEmpty.style.display = 'flex';
-            if (slidingCartItems) slidingCartItems.style.display = 'none';
+            if (slidingCartEmpty) slidingCartEmpty.classList.remove('d-none');
+            if (slidingCartProducts) slidingCartProducts.classList.add('d-none');
           } else {
-            if (slidingCartEmpty) slidingCartEmpty.style.display = 'none';
-            if (slidingCartItems) slidingCartItems.style.display = 'block';
-            if (slidingCartTemplate) slidingCartTemplate.innerHTML = html;
+            if (slidingCartEmpty) slidingCartEmpty.classList.add('d-none');
+            if (slidingCartProducts) slidingCartProducts.classList.remove('d-none');
           }
   
           // Update totals
           if (slidingCartTotals && cart.totals) {
-            slidingCartTotals.innerHTML = cart.totals.map(total => `
+            const totalsHtml = cart.totals.map(total => `
               <li class="${total.code === 'total' ? 'cart__total-item--total' : 'cart__total-item'}">
                 <p>${total.title}</p>
                 <p>${total.value_string}</p>
               </li>
             `).join('');
+            slidingCartTotals.innerHTML = totalsHtml;
           }
         };
+  
+        // Also sync cart on initialization if there are products
+        const mainCartTemplate = document.querySelector('.template_for_cart_products_list');
+        if (mainCartTemplate) {
+          const slidingCartTemplate = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
+          if (slidingCartTemplate) {
+            slidingCartTemplate.innerHTML = mainCartTemplate.innerHTML;
+          }
+        }
       }
   
       bindCartIconClick() {
-        // Find all possible cart icons
         const cartIcons = document.querySelectorAll('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart, [data-cart-icon]');
         
         cartIcons.forEach(icon => {
