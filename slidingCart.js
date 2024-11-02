@@ -1,4 +1,4 @@
-// src/scripts/slidingCart.js v1.1.7
+// src/scripts/slidingCart.js v1.1.8
 // HMStudio Sliding Cart Feature
 // Created by HMStudio
 
@@ -17,6 +17,24 @@
         this.initializeSlidingCart();
       }
   
+      async parseOriginalCartContent() {
+        console.log('Attempting to parse cart content...');
+        
+        // Try to get cart content from current page
+        const mainCartContent = document.querySelector('.template_for_cart_products_list');
+        
+        if (mainCartContent) {
+          console.log('Found cart content in current page');
+          this.parseCartContent({
+            productsTemplate: mainCartContent,
+            totalsList: document.querySelector('.cart__total-list')
+          });
+        } else {
+          console.log('No cart content found in current page, fetching from cart page...');
+          await this.fetchCartPage();
+        }
+      }
+
       // ============ Cart State Management ============
       initializeSlidingCart() {
         console.log('Initializing sliding cart...');
@@ -46,27 +64,52 @@
       }
       
       async fetchCartPage() {
-        try {
-          const response = await fetch('/cart/view');
-          const text = await response.text();
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(text, 'text/html');
-          
-          const cartContent = {
-            productsTemplate: doc.querySelector('.template_for_cart_products_list'),
-            totalsList: doc.querySelector('.cart__total-list')
-          };
+    try {
+      const response = await fetch('/cart/view');
+      const text = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, 'text/html');
       
-          if (cartContent.productsTemplate) {
-            this.parseCartContent(cartContent);
-          } else {
-            console.error('Could not find cart template in fetched page');
-          }
-        } catch (error) {
-          console.error('Error fetching cart page:', error);
-        }
+      const cartContent = {
+        productsTemplate: doc.querySelector('.template_for_cart_products_list'),
+        totalsList: doc.querySelector('.cart__total-list')
+      };
+
+      if (cartContent.productsTemplate) {
+        console.log('Successfully fetched cart content');
+        this.parseCartContent(cartContent);
+      } else {
+        console.log('No cart template found in fetched page');
+        // If we can't find the template, try to get cart data from Zid's cart badge
+        this.checkCartBadge();
       }
+    } catch (error) {
+      console.error('Error fetching cart page:', error);
+      this.checkCartBadge();
+    }
+  }
       
+  checkCartBadge() {
+    // Check if there are items in cart based on Zid's cart badge
+    const cartBadge = document.querySelector('.cart-icon .badge, .header-cart-icon .badge, a-shopping-cart, .a-shopping-cart');
+    const itemCount = cartBadge ? parseInt(cartBadge.textContent) : 0;
+    console.log('Cart badge count:', itemCount);
+    
+    if (itemCount > 0) {
+      // If we have items but can't get the template, show a temporary message
+      const slidingCartProducts = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
+      if (slidingCartProducts) {
+        slidingCartProducts.innerHTML = `<div class="cart-loading" style="text-align: center; padding: 20px;">
+          ${this.currentLanguage === 'ar' ? 'جاري تحميل محتويات السلة...' : 'Loading cart contents...'}
+        </div>`;
+      }
+      // Try to fetch cart page again after a short delay
+      setTimeout(() => this.fetchCartPage(), 1000);
+    } else {
+      this.updateEmptyState(false);
+    }
+  }
+
       parseCartContent(content) {
         // Parse products
         if (content.productsTemplate) {
@@ -93,47 +136,79 @@
       }
   
       setupStateSync() {
-        // Override Zid's cart update function
+        // Store original cart functions
         const originalCartProductsHtmlChanged = window.cartProductsHtmlChanged || function() {};
-        
+        const originalSetCartBadge = window.setCartBadge || function() {};
+    
+        // Override cart update function
         window.cartProductsHtmlChanged = (html, cart) => {
+          console.log('Cart updated:', { productsCount: cart?.products_count });
+          
           // Call original function
           originalCartProductsHtmlChanged(html, cart);
           
-          // Update our sliding cart
+          // Update sliding cart
           this.updateSlidingCartContent(html, cart);
-      
-          // Also update the main cart if we're not on the cart page
+    
+          // If we're not on the cart page, also update the main cart template
           const mainCartTemplate = document.querySelector('.template_for_cart_products_list');
           if (mainCartTemplate) {
             mainCartTemplate.innerHTML = html;
           }
         };
-
-        // Also watch for Zid's cart badge updates
-  const originalSetCartBadge = window.setCartBadge || function() {};
-  window.setCartBadge = (count) => {
-    originalSetCartBadge(count);
-    // Refresh our cart content when the badge updates
-    this.parseOriginalCartContent();
-  };
-}
+    
+        // Override cart badge function
+        window.setCartBadge = (count) => {
+          originalSetCartBadge(count);
+          console.log('Cart badge updated:', count);
+          
+          // If count is greater than 0 and we don't have cart content, fetch it
+          if (count > 0) {
+            const slidingCartProducts = document.querySelector('#hmstudio-sliding-cart .template_for_cart_products_list');
+            if (!slidingCartProducts?.children.length) {
+              this.fetchCartPage();
+            }
+          } else {
+            this.updateEmptyState(false);
+          }
+        };
+    
+        // Listen for add to cart events
+        document.addEventListener('click', (e) => {
+          if (e.target.matches('.product-card-add-to-cart, .btn-add-to-cart, .quick-view-modal .add-to-cart-btn')) {
+            console.log('Add to cart clicked');
+            // Wait for Zid to process the add to cart
+            setTimeout(() => this.fetchCartPage(), 1000);
+          }
+        });
+    
+        // Listen for form submissions
+        document.addEventListener('submit', (e) => {
+          if (e.target.matches('form[action*="/cart/add"]')) {
+            console.log('Cart form submitted');
+            // Wait for Zid to process the add to cart
+            setTimeout(() => this.fetchCartPage(), 1000);
+          }
+        });
+      }
   
       updateSlidingCartContent(html, cart) {
+        console.log('Updating sliding cart content');
         const slidingCart = document.getElementById('hmstudio-sliding-cart');
         if (!slidingCart) return;
-  
-        // Update products
+    
+        // Update products list
         const productsContainer = slidingCart.querySelector('.template_for_cart_products_list');
-        if (productsContainer) {
+        if (productsContainer && html) {
           productsContainer.innerHTML = html;
+          this.bindProductEvents();
         }
-  
-        // Update totals
+    
+        // Update totals if available
         if (cart?.totals) {
           const totalsContainer = slidingCart.querySelector('.cart__total-list');
           if (totalsContainer) {
-            totalsContainer.innerHTML = cart.totals.map(total => `
+            let totalsHTML = cart.totals.map(total => `
               <div class="${total.code === 'total' ? 'cart__total-item--total' : 'cart__total-item'}" style="
                 display: flex;
                 justify-content: space-between;
@@ -144,15 +219,14 @@
                 <span>${total.value_string}</span>
               </div>
             `).join('');
+            totalsContainer.innerHTML = totalsHTML;
           }
         }
-  
-        // Update state
+    
+        // Update empty state
         this.updateEmptyState(cart?.products_count > 0);
-  
-        // Rebind events
-        this.bindProductEvents();
       }
+    
   
       // ============ Interaction Handlers ============
       handleQuantityChange(select) {
@@ -236,7 +310,7 @@
       // ============ Event Binding ============
       bindEventListeners() {
         // Cart icon click
-        document.querySelectorAll('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart, [data-cart-icon]').forEach(icon => {
+        document.querySelectorAll('.cart-icon, .header-cart-icon, a-shopping-cart, .a-shopping-cart, a-shopping-cart, .a-shopping-cart, [data-cart-icon]').forEach(icon => {
           icon.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
